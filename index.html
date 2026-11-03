@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<meta name="description" content="ApexLedger — Professional Trading Journal & Analytics"/>
+<meta name="description" content="ApexLedger — Professional Trading Journal & Analytics (Supabase)"/>
 <title>ApexLedger | Trading Journal</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0a0f'/%3E%3Cpath d='M18 40 L32 18 L46 40 Z' fill='none' stroke='%238b5cf6' stroke-width='3'/%3E%3Ccircle cx='32' cy='36' r='4' fill='%23a78bfa'/%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -13,6 +13,7 @@
 tailwind.config={darkMode:'class',theme:{extend:{colors:{brand:{50:'#f5f3ff',100:'#ede9fe',200:'#ddd6fe',300:'#c4b5fd',400:'#a78bfa',500:'#8b5cf6',600:'#7c3aed',700:'#6d28d9',800:'#5b21b6',900:'#4c1d95'},surface:{50:'#fafafa',100:'#f4f4f5',200:'#e4e4e7',300:'#d4d4d8',400:'#a1a1aa',500:'#71717a',600:'#52525b',700:'#3f3f46',800:'#27272a',900:'#18181b',950:'#09090b'}},fontFamily:{sans:['Inter','system-ui','sans-serif'],mono:['JetBrains Mono','monospace']}}}}
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--brand:#8b5cf6;--profit:#10b981;--loss:#ef4444}
 *{box-sizing:border-box}
@@ -140,9 +141,6 @@ html:not(.dark) table.data-table td{color:#3f3f46}
         <button type="submit" class="btn-primary w-full">Sign In</button>
       </form>
       <p class="text-center text-sm text-surface-400 mt-6">No account? <button type="button" onclick="showAuthView('register')" class="text-brand-400 font-medium">Create one</button></p>
-      <div class="mt-6 pt-6 border-t border-surface-800">
-        <button type="button" onclick="loadDemo()" class="btn-secondary w-full text-sm">Try Demo Account</button>
-      </div>
     </div>
     <div id="register-view" class="hidden bg-surface-900 border border-surface-800 rounded-2xl p-8 shadow-2xl">
       <div class="text-center mb-8"><h1 class="text-2xl font-bold">Create Account</h1><p class="text-surface-400 mt-2 text-sm">Start journaling professionally</p></div>
@@ -208,7 +206,7 @@ html:not(.dark) table.data-table td{color:#3f3f46}
       </nav>
       <div class="p-2 border-t border-surface-800 mt-auto">
         <a href="#" data-page="settings" class="nav-item" title="Settings"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg><span class="nav-label">Settings</span></a>
-        <div class="text-[10px] text-surface-600 px-2 pt-1 sidebar-label">ApexLedger v1.1</div>
+        <div class="text-[10px] text-surface-600 px-2 pt-1 sidebar-label">ApexLedger + Supabase</div>
       </div>
     </aside>
     <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-20 hidden lg:hidden"></div>
@@ -220,21 +218,14 @@ html:not(.dark) table.data-table td{color:#3f3f46}
 <div id="modal-container"></div>
 
 <script>
-/* ===================== CORE DATA & STORE ===================== */
-/**
- * Instrument specs optimized for accurate pip/point & P/L calculation.
- * - pipSize: size of 1 pip/point in price terms
- * - pipValue: USD value of 1 pip/point for 1.00 standard lot
- * - contractSize: underlying units per lot (informational)
- * - digits: typical price precision
- *
- * Notes:
- * - Forex majors/minors: standard 100k, pipValue ~$10 (or adjusted for quote currency)
- * - JPY pairs: pipSize 0.01, pipValue approx $9.09 at ~110 USDJPY (simplified fixed)
- * - Gold (XAU): commonly $1 per 0.01 move per oz; many CFDs treat 1 lot = 100 oz → pipValue 100, but we keep common journal value of 1 for "per unit" style; adjust if your broker differs
- * - Indices: 1 point = $1 per lot for most CFD brokers in this model
- * - USOIL (WTI CFD): typical 1 lot = 100 barrels; $0.01 move ≈ $1 → pipValue 1 (or 10 depending on broker definition of "lot"). We use 10 as common CFD default for 1.00 lot on $0.01.
- */
+/* ===================== SUPABASE CONFIG ===================== */
+/* ★★★ REPLACE THESE TWO VALUES WITH YOUR OWN ★★★ */
+const SUPABASE_URL = 'https://yryquaecrubhzjlzbigk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlyeXF1YWVjcnViaHpqbHpiaWdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM3MTgwMjQsImV4cCI6MjEwOTI5NDAyNH0.-m-rR75DfaYLOAjkfE62Hyywq5wkB5mtGKJFeR5qGqI';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ===================== CORE DATA ===================== */
 const INSTRUMENTS = {
   EURUSD:{name:'EUR/USD',type:'forex',pipSize:0.0001,pipValue:10,contractSize:100000,digits:5},
   GBPUSD:{name:'GBP/USD',type:'forex',pipSize:0.0001,pipValue:10,contractSize:100000,digits:5},
@@ -271,108 +262,27 @@ const DEFAULT_DISCIPLINE = [
   {id:'review_weekly',label:'Weekly review completed',required:false}
 ];
 
-const Store = {
-  _key(uid,k){return `apexledger_${uid}_${k}`},
-  get(uid,k,def=[]){try{const r=localStorage.getItem(this._key(uid,k));return r?JSON.parse(r):def}catch{return def}},
-  set(uid,k,v){localStorage.setItem(this._key(uid,k),JSON.stringify(v))},
-  getAccounts(uid){return this.get(uid,'accounts',[])},
-  saveAccounts(uid,a){this.set(uid,'accounts',a)},
-  getTrades(uid){return this.get(uid,'trades',[])},
-  saveTrades(uid,t){this.set(uid,'trades',t)},
-  getStrategies(uid){return this.get(uid,'strategies',[])},
-  saveStrategies(uid,s){this.set(uid,'strategies',s)},
-  getGoals(uid){return this.get(uid,'goals',{})},
-  saveGoals(uid,g){this.set(uid,'goals',g)},
-  getNotes(uid){return this.get(uid,'notes',[])},
-  saveNotes(uid,n){this.set(uid,'notes',n)},
-  getScreenshots(uid){return this.get(uid,'screenshots',[])},
-  saveScreenshots(uid,s){this.set(uid,'screenshots',s)},
-  getSettings(uid){return this.get(uid,'settings',{theme:'dark',defaultRiskPercent:1,maxRiskPercent:2,preferredLots:0.1})},
-  saveSettings(uid,s){this.set(uid,'settings',s)},
-  getNotifications(uid){return this.get(uid,'notifications',[])},
-  saveNotifications(uid,n){this.set(uid,'notifications',n)},
-  exportAll(uid){return{accounts:this.getAccounts(uid),trades:this.getTrades(uid),strategies:this.getStrategies(uid),goals:this.getGoals(uid),notes:this.getNotes(uid),screenshots:this.getScreenshots(uid),settings:this.getSettings(uid)}},
-  importData(uid,data){if(data.accounts)this.saveAccounts(uid,data.accounts);if(data.trades)this.saveTrades(uid,data.trades);if(data.strategies)this.saveStrategies(uid,data.strategies);if(data.goals)this.saveGoals(uid,data.goals);if(data.notes)this.saveNotes(uid,data.notes);if(data.screenshots)this.saveScreenshots(uid,data.screenshots);if(data.settings)this.saveSettings(uid,data.settings)}
+/* ===================== STATE ===================== */
+let currentUser = null;
+let selectedAccountId = 'all';
+let currentPage = 'dashboard';
+let chartInstances = {};
+let userCache = {
+  accounts: [],
+  trades: [],
+  strategies: [],
+  goals: {},
+  notes: [],
+  screenshots: [],
+  settings: { theme: 'dark', defaultRiskPercent: 1, maxRiskPercent: 2, preferredLots: 0.1 }
 };
-
-/* ===================== AUTH ===================== */
-let currentUser=null,selectedAccountId='all',currentPage='dashboard',chartInstances={};
-
-function generateId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,9)}
-function getUsers(){try{return JSON.parse(localStorage.getItem('apexledger_users')||'[]')}catch{return[]}}
-function saveUsers(u){localStorage.setItem('apexledger_users',JSON.stringify(u))}
-function getCurrentUser(){return currentUser}
-
-function register(name,email,password,confirm){
-  if(password!==confirm)return{success:false,error:'Passwords do not match'};
-  if(password.length<6)return{success:false,error:'Password too short'};
-  const users=getUsers();
-  if(users.some(u=>u.email.toLowerCase()===email.toLowerCase()))return{success:false,error:'Email already registered'};
-  const user={id:generateId(),name,email,password,createdAt:new Date().toISOString()};
-  users.push(user);saveUsers(users);
-  Store.saveAccounts(user.id,[{id:generateId(),name:'Main Account',broker:'Demo',currency:'USD',balance:10000,status:'active',createdAt:new Date().toISOString()}]);
-  Store.saveSettings(user.id,{theme:'dark',defaultRiskPercent:1,maxRiskPercent:2,preferredLots:0.1});
-  return{success:true,user};
-}
-function login(email,password){
-  const users=getUsers();
-  const user=users.find(u=>u.email.toLowerCase()===email.toLowerCase()&&u.password===password);
-  if(!user)return{success:false,error:'Invalid email or password'};
-  currentUser={id:user.id,name:user.name,email:user.email};
-  localStorage.setItem('apexledger_session',JSON.stringify(currentUser));
-  return{success:true};
-}
-function logout(){
-  currentUser=null;localStorage.removeItem('apexledger_session');
-  document.getElementById('app').classList.add('hidden');
-  document.getElementById('auth-container').classList.remove('hidden');
-  showAuthView('login');
-}
-function loadDemo(){
-  let users=getUsers();
-  let demo=users.find(u=>u.email==='demo@apexledger.app');
-  if(!demo){
-    demo={id:'demo-user',name:'Demo Trader',email:'demo@apexledger.app',password:'demo123'};
-    users.push(demo);saveUsers(users);
-    const accId=generateId();
-    Store.saveAccounts(demo.id,[{id:accId,name:'Demo Prop',broker:'Apex',currency:'USD',balance:50000,status:'active',createdAt:new Date().toISOString()}]);
-    const now=new Date();
-    const trades=[];
-    const instruments=['EURUSD','GBPUSD','XAUUSD','NAS100','USDJPY','USOIL'];
-    for(let i=0;i<28;i++){
-      const d=new Date(now);d.setDate(d.getDate()-i);
-      const inst=instruments[i%instruments.length];
-      const dir=Math.random()>0.45?'buy':'sell';
-      const lots=+(0.1+Math.random()*0.9).toFixed(2);
-      let entry;
-      if(inst==='XAUUSD') entry=2000+Math.random()*100;
-      else if(inst==='NAS100') entry=15000+Math.random()*500;
-      else if(inst==='USOIL') entry=70+Math.random()*15;
-      else entry=1.08+Math.random()*0.05;
-      const pips=(Math.random()-0.42)*40;
-      const spec=INSTRUMENTS[inst];
-      const netPL=+(pips*spec.pipValue*lots).toFixed(2);
-      const priceMove=pips*spec.pipSize;
-      const exit=dir==='buy'?entry+priceMove:entry-priceMove;
-      trades.push({id:generateId(),accountId:accId,instrument:inst,direction:dir,lots,entryPrice:+entry.toFixed(spec.digits),exitPrice:+exit.toFixed(spec.digits),stopLoss:null,takeProfit:null,pips:+pips.toFixed(1),netPL,commission:0,swap:0,status:'closed',strategy:['Breakout','Trend Following','Scalping'][i%3],session:['London','New York','Asia'][i%3],emotionalState:['Calm','Focused','FOMO','Revenge'][i%4],notes:'',openTime:d.toISOString(),closeTime:d.toISOString(),createdAt:d.toISOString()});
-    }
-    Store.saveTrades(demo.id,trades);
-    Store.saveStrategies(demo.id,Object.keys(STRATEGY_TEMPLATES).map(n=>({id:generateId(),name:n,...STRATEGY_TEMPLATES[n]})));
-    Store.saveGoals(demo.id,{monthlyTarget:2000,maxDailyLoss:300,maxTradesPerDay:5,maxRiskPercent:1,disciplineItems:DEFAULT_DISCIPLINE.map(x=>({...x,checked:Math.random()>0.3})),visionGoals:[]});
-    Store.saveSettings(demo.id,{theme:'dark',defaultRiskPercent:1,maxRiskPercent:2,preferredLots:0.5});
-    Store.saveNotifications(demo.id,[{id:'n1',title:'Welcome to ApexLedger',message:'Explore the demo journal with sample trades.',read:false,timestamp:new Date().toISOString()}]);
-  }
-  currentUser={id:demo.id,name:demo.name,email:demo.email};
-  localStorage.setItem('apexledger_session',JSON.stringify(currentUser));
-  showToast('Demo account loaded','success');
-  initApp();
-}
 
 /* ===================== HELPERS ===================== */
 function formatCurrency(v,cur='USD'){const n=Number(v)||0;return (n>=0?'+':'')+n.toLocaleString(undefined,{style:'currency',currency:cur,minimumFractionDigits:2})}
 function formatPL(v,cur='USD'){const n=Number(v)||0;const cls=n>0?'text-profit':n<0?'text-loss':'';return `<span class="mono font-semibold ${cls}">${formatCurrency(n,cur)}</span>`}
 function plClass(v){return v>0?'text-profit':v<0?'text-loss':''}
-function isWinPL(v){return (v||0)>0}function isLossPL(v){return (v||0)<0}function isBreakevenPL(v){return Math.abs(v||0)<0.01}
+function isWinPL(v){return (v||0)>0}
+function isLossPL(v){return (v||0)<0}
 function formatDate(d,withTime=false){if(!d)return'—';const dt=new Date(d);return withTime?dt.toLocaleString():dt.toLocaleDateString()}
 function escapeHtml(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function showToast(msg,type='info'){
@@ -393,39 +303,24 @@ function confirmDialog(title,msg,onYes,yesLabel='Confirm',danger=false){
   document.getElementById('confirm-yes').onclick=()=>{closeModal();onYes()};
 }
 
-/* ===================== CALCULATIONS (optimized) ===================== */
-/**
- * Accurate pip/point calculation.
- * Direction: 'buy'/'long' profit when exit > entry; 'sell'/'short' when entry > exit.
- * Returns pips rounded to 1 decimal for consistency across asset classes.
- */
+/* ===================== CALCULATIONS ===================== */
 function calcPips(inst, entry, exit, dir){
   const spec = INSTRUMENTS[inst];
   if(!spec || entry == null || exit == null || isNaN(entry) || isNaN(exit)) return 0;
   const isLong = (dir === 'buy' || dir === 'long');
   const diff = isLong ? (exit - entry) : (entry - exit);
-  const pips = diff / spec.pipSize;
-  return +pips.toFixed(1);
+  return +(diff / spec.pipSize).toFixed(1);
 }
-
-/**
- * Net P/L = (pips × pipValue × lots) − commission − swap
- * pipValue is defined per 1.00 lot.
- */
 function calcNetPL(inst, lots, pips, commission = 0, swap = 0){
   const spec = INSTRUMENTS[inst];
   if(!spec) return 0;
-  const gross = pips * spec.pipValue * (lots || 0);
-  return +(gross - (commission || 0) - (swap || 0)).toFixed(2);
+  return +((pips * spec.pipValue * (lots || 0)) - (commission || 0) - (swap || 0)).toFixed(2);
 }
-
-/** Optional helper: theoretical risk in $ if SL is set */
 function calcRiskAmount(inst, lots, entry, stopLoss, dir){
   if(stopLoss == null || entry == null) return null;
   const riskPips = Math.abs(calcPips(inst, entry, stopLoss, dir));
   return calcNetPL(inst, lots, riskPips, 0, 0);
 }
-
 function getFilteredTrades(data){
   let t = data.trades || [];
   if(selectedAccountId && selectedAccountId !== 'all') t = t.filter(x => x.accountId === selectedAccountId);
@@ -435,7 +330,7 @@ function getActiveAccount(data){
   if(selectedAccountId === 'all') return data.accounts?.[0];
   return data.accounts?.find(a => a.id === selectedAccountId);
 }
-function calculateStatistics(trades, accounts = [], opts = {}){
+function calculateStatistics(trades){
   const closed = (trades || []).filter(t => t.status === 'closed');
   const wins = closed.filter(t => isWinPL(t.netPL));
   const losses = closed.filter(t => isLossPL(t.netPL));
@@ -451,115 +346,208 @@ function calculateStatistics(trades, accounts = [], opts = {}){
   let eq = 0;
   const equityCurve = [{x: 0, y: 0}];
   sorted.forEach((t, i) => { eq += (t.netPL || 0); equityCurve.push({x: i + 1, y: +eq.toFixed(2)}); });
-  const dailyPL = {};
+  const byInstrument = {}, bySession = {}, byStrategy = {};
   closed.forEach(t => {
-    const d = (t.closeTime || t.openTime || '').slice(0, 10);
-    if(!d) return;
-    dailyPL[d] = (dailyPL[d] || 0) + (t.netPL || 0);
+    const k1 = t.instrument || 'Other';
+    if(!byInstrument[k1]) byInstrument[k1] = {trades:0,netPL:0,wins:0};
+    byInstrument[k1].trades++; byInstrument[k1].netPL += t.netPL||0; if(isWinPL(t.netPL)) byInstrument[k1].wins++;
+    const k2 = t.session || 'Unknown';
+    if(!bySession[k2]) bySession[k2] = {trades:0,netPL:0,wins:0};
+    bySession[k2].trades++; bySession[k2].netPL += t.netPL||0; if(isWinPL(t.netPL)) bySession[k2].wins++;
+    const k3 = t.strategy || 'Untagged';
+    if(!byStrategy[k3]) byStrategy[k3] = {trades:0,netPL:0,wins:0};
+    byStrategy[k3].trades++; byStrategy[k3].netPL += t.netPL||0; if(isWinPL(t.netPL)) byStrategy[k3].wins++;
   });
-  const byInstrument = {};
-  closed.forEach(t => {
-    const k = t.instrument || 'Other';
-    if(!byInstrument[k]) byInstrument[k] = {trades: 0, netPL: 0, wins: 0};
-    byInstrument[k].trades++;
-    byInstrument[k].netPL += t.netPL || 0;
-    if(isWinPL(t.netPL)) byInstrument[k].wins++;
-  });
-  const bySession = {};
-  closed.forEach(t => {
-    const k = t.session || 'Unknown';
-    if(!bySession[k]) bySession[k] = {trades: 0, netPL: 0, wins: 0};
-    bySession[k].trades++;
-    bySession[k].netPL += t.netPL || 0;
-    if(isWinPL(t.netPL)) bySession[k].wins++;
-  });
-  const byStrategy = {};
-  closed.forEach(t => {
-    const k = t.strategy || 'Untagged';
-    if(!byStrategy[k]) byStrategy[k] = {trades: 0, netPL: 0, wins: 0};
-    byStrategy[k].trades++;
-    byStrategy[k].netPL += t.netPL || 0;
-    if(isWinPL(t.netPL)) byStrategy[k].wins++;
-  });
-  let maxConsecWins = 0, maxConsecLosses = 0, cw = 0, cl = 0;
+  let maxConsecWins=0, maxConsecLosses=0, cw=0, cl=0;
   sorted.forEach(t => {
-    if(isWinPL(t.netPL)) { cw++; cl = 0; maxConsecWins = Math.max(maxConsecWins, cw); }
-    else if(isLossPL(t.netPL)) { cl++; cw = 0; maxConsecLosses = Math.max(maxConsecLosses, cl); }
-    else { cw = 0; cl = 0; }
+    if(isWinPL(t.netPL)){cw++;cl=0;maxConsecWins=Math.max(maxConsecWins,cw)}
+    else if(isLossPL(t.netPL)){cl++;cw=0;maxConsecLosses=Math.max(maxConsecLosses,cl)}
+    else{cw=0;cl=0}
   });
-  let peak = 0, maxDD = 0, run = 0;
-  equityCurve.forEach(p => {
-    run = p.y;
-    if(run > peak) peak = run;
-    const dd = peak - run;
-    if(dd > maxDD) maxDD = dd;
-  });
-  const longTrades = closed.filter(t => t.direction === 'buy' || t.direction === 'long');
-  const shortTrades = closed.filter(t => t.direction === 'sell' || t.direction === 'short');
+  let peak=0, maxDD=0;
+  equityCurve.forEach(p => { if(p.y>peak) peak=p.y; const dd=peak-p.y; if(dd>maxDD) maxDD=dd; });
+  const longTrades = closed.filter(t => t.direction==='buy'||t.direction==='long');
+  const shortTrades = closed.filter(t => t.direction==='sell'||t.direction==='short');
   return {
-    totalTrades: closed.length, wins: wins.length, losses: losses.length, winRate, netPL, grossProfit, grossLoss,
-    avgWin, avgLoss, profitFactor, expectancy, equityCurve, dailyPL, byInstrument, bySession, byStrategy,
-    maxConsecWins, maxConsecLosses, maxDrawdown: maxDD,
-    longTrades: longTrades.length, shortTrades: shortTrades.length,
-    longPL: longTrades.reduce((s, t) => s + (t.netPL || 0), 0),
-    shortPL: shortTrades.reduce((s, t) => s + (t.netPL || 0), 0),
-    bestTrade: sorted.reduce((b, t) => !b || (t.netPL || 0) > (b.netPL || 0) ? t : b, null),
-    worstTrade: sorted.reduce((b, t) => !b || (t.netPL || 0) < (b.netPL || 0) ? t : b, null)
+    totalTrades:closed.length, wins:wins.length, losses:losses.length, winRate, netPL, grossProfit, grossLoss,
+    avgWin, avgLoss, profitFactor, expectancy, equityCurve, byInstrument, bySession, byStrategy,
+    maxConsecWins, maxConsecLosses, maxDrawdown:maxDD,
+    longTrades:longTrades.length, shortTrades:shortTrades.length,
+    longPL:longTrades.reduce((s,t)=>s+(t.netPL||0),0),
+    shortPL:shortTrades.reduce((s,t)=>s+(t.netPL||0),0)
   };
 }
 function calcDisciplineThermometer(trades){
-  const days = [];
-  const now = new Date();
-  for(let i = 29; i >= 0; i--){
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    const has = trades.some(t => (t.openTime || '').startsWith(key) || (t.closeTime || '').startsWith(key));
-    days.push({date: key, status: has ? 'present' : 'missed'});
+  const days=[]; const now=new Date();
+  for(let i=29;i>=0;i--){
+    const d=new Date(now); d.setDate(d.getDate()-i);
+    const key=d.toISOString().slice(0,10);
+    const has=trades.some(t=>(t.openTime||'').startsWith(key)||(t.closeTime||'').startsWith(key));
+    days.push({date:key,status:has?'present':'missed'});
   }
-  const showed = days.filter(d => d.status === 'present').length;
-  const missed = 30 - showed;
-  const score = showed - missed;
-  const markerPct = Math.min(100, Math.max(0, ((score + 30) / 60) * 100));
-  return {days, showed, missed, window: 30, score, fillPct: Math.abs(score) / 30 * 50, fillLeft: score >= 0 ? 50 : 50 - Math.abs(score) / 30 * 50, markerPct};
+  const showed=days.filter(d=>d.status==='present').length;
+  const missed=30-showed;
+  const score=showed-missed;
+  const markerPct=Math.min(100,Math.max(0,((score+30)/60)*100));
+  return {days,showed,missed,window:30,score,markerPct};
 }
-
-/** ISO week helpers for weekly P/L */
 function getISOWeekKey(dateStr){
-  const d = new Date(dateStr + 'T12:00:00');
-  const day = (d.getDay() + 6) % 7; // Mon=0
-  d.setDate(d.getDate() - day + 3);
-  const week1 = new Date(d.getFullYear(), 0, 4);
-  const weekNo = 1 + Math.round(((d - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-  return `${d.getFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-}
-function getWeekBounds(year, month, day){
-  const d = new Date(year, month, day);
-  const dayOfWeek = (d.getDay() + 6) % 7; // Mon=0
-  const monday = new Date(d);
-  monday.setDate(d.getDate() - dayOfWeek);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  return {start: monday, end: sunday};
+  const d=new Date(dateStr+'T12:00:00');
+  const day=(d.getDay()+6)%7;
+  d.setDate(d.getDate()-day+3);
+  const week1=new Date(d.getFullYear(),0,4);
+  const weekNo=1+Math.round(((d-week1)/86400000-3+((week1.getDay()+6)%7))/7);
+  return `${d.getFullYear()}-W${String(weekNo).padStart(2,'0')}`;
 }
 
-/* ===================== DATA ACCESS ===================== */
+/* ===================== DATA ACCESS (Supabase) ===================== */
+async function loadAllUserData(){
+  if(!currentUser) return;
+  const uid = currentUser.id;
+
+  const [accRes, tradeRes, stratRes, goalsRes, notesRes, shotsRes, settingsRes] = await Promise.all([
+    supabase.from('trading_accounts').select('*').order('created_at',{ascending:true}),
+    supabase.from('trades').select('*').order('open_time',{ascending:false}),
+    supabase.from('strategies').select('*').order('created_at',{ascending:true}),
+    supabase.from('goals').select('*').eq('user_id',uid).maybeSingle(),
+    supabase.from('notes').select('*').order('created_at',{ascending:false}),
+    supabase.from('screenshots').select('*').order('created_at',{ascending:false}),
+    supabase.from('settings').select('*').eq('user_id',uid).maybeSingle()
+  ]);
+
+  if(accRes.error) console.error('accounts', accRes.error);
+  if(tradeRes.error) console.error('trades', tradeRes.error);
+
+  userCache.accounts = (accRes.data||[]).map(a => ({
+    id:a.id, name:a.name, broker:a.broker, currency:a.currency,
+    balance:a.balance, status:a.status, createdAt:a.created_at
+  }));
+
+  userCache.trades = (tradeRes.data||[]).map(t => ({
+    id:t.id, accountId:t.account_id, instrument:t.instrument, direction:t.direction,
+    lots:t.lots, entryPrice:t.entry_price, exitPrice:t.exit_price,
+    stopLoss:t.stop_loss, takeProfit:t.take_profit, pips:t.pips, netPL:t.net_pl,
+    commission:t.commission, swap:t.swap, status:t.status, strategy:t.strategy,
+    session:t.session, emotionalState:t.emotional_state, setupQuality:t.setup_quality,
+    rMultiple:t.r_multiple, notes:t.notes, openTime:t.open_time, closeTime:t.close_time,
+    createdAt:t.created_at
+  }));
+
+  userCache.strategies = (stratRes.data||[]).map(s => ({
+    id:s.id, name:s.name, summary:s.summary, details:s.details,
+    markets:s.markets, timeframes:s.timeframes
+  }));
+
+  if(goalsRes.data){
+    userCache.goals = {
+      monthlyTarget: goalsRes.data.monthly_target,
+      maxDailyLoss: goalsRes.data.max_daily_loss,
+      maxTradesPerDay: goalsRes.data.max_trades_per_day,
+      maxRiskPercent: goalsRes.data.max_risk_percent,
+      disciplineItems: goalsRes.data.discipline_items || DEFAULT_DISCIPLINE.map(x=>({...x,checked:false})),
+      visionGoals: goalsRes.data.vision_goals || []
+    };
+  } else {
+    userCache.goals = {
+      monthlyTarget:1000, maxDailyLoss:200, maxTradesPerDay:5, maxRiskPercent:1,
+      disciplineItems: DEFAULT_DISCIPLINE.map(x=>({...x,checked:false})), visionGoals:[]
+    };
+  }
+
+  userCache.notes = (notesRes.data||[]).map(n => ({
+    id:n.id, title:n.title, body:n.body, createdAt:n.created_at
+  }));
+
+  userCache.screenshots = (shotsRes.data||[]).map(s => ({
+    id:s.id, tradeId:s.trade_id, storagePath:s.storage_path, name:s.name, createdAt:s.created_at
+  }));
+
+  if(settingsRes.data){
+    userCache.settings = {
+      theme: settingsRes.data.theme || 'dark',
+      defaultRiskPercent: settingsRes.data.default_risk_percent || 1,
+      maxRiskPercent: settingsRes.data.max_risk_percent || 2,
+      preferredLots: settingsRes.data.preferred_lots || 0.1
+    };
+  }
+}
+
 function getUserData(){
-  const user = getCurrentUser();
-  if(!user) return null;
   return {
-    user,
-    accounts: Store.getAccounts(user.id),
-    trades: Store.getTrades(user.id),
-    strategies: Store.getStrategies(user.id),
-    goals: Store.getGoals(user.id),
-    notes: Store.getNotes(user.id),
-    screenshots: Store.getScreenshots(user.id),
-    settings: Store.getSettings(user.id),
-    notifications: Store.getNotifications(user.id)
+    user: currentUser,
+    accounts: userCache.accounts,
+    trades: userCache.trades,
+    strategies: userCache.strategies,
+    goals: userCache.goals,
+    notes: userCache.notes,
+    screenshots: userCache.screenshots,
+    settings: userCache.settings
   };
 }
-function notifyDataChanged(){}
+
+/* ===================== AUTH ===================== */
+async function register(name, email, password, confirm){
+  if(password !== confirm) return {success:false, error:'Passwords do not match'};
+  if(password.length < 6) return {success:false, error:'Password too short'};
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: name } }
+  });
+
+  if(error) return {success:false, error: error.message};
+  if(!data.user) return {success:false, error:'Registration failed'};
+
+  // Create default rows for the new user
+  await Promise.all([
+    supabase.from('trading_accounts').insert({
+      user_id: data.user.id,
+      name: 'Main Account',
+      broker: 'Demo',
+      currency: 'USD',
+      balance: 10000,
+      status: 'active'
+    }),
+    supabase.from('settings').insert({
+      user_id: data.user.id,
+      theme: 'dark',
+      default_risk_percent: 1,
+      max_risk_percent: 2,
+      preferred_lots: 0.1
+    }),
+    supabase.from('goals').insert({
+      user_id: data.user.id,
+      monthly_target: 1000,
+      max_daily_loss: 200,
+      max_trades_per_day: 5,
+      max_risk_percent: 1,
+      discipline_items: DEFAULT_DISCIPLINE.map(x=>({...x,checked:false}))
+    })
+  ]);
+
+  return {success:true, user: data.user};
+}
+
+async function login(email, password){
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if(error) return {success:false, error: error.message};
+  currentUser = {
+    id: data.user.id,
+    name: data.user.user_metadata?.full_name || data.user.email.split('@')[0],
+    email: data.user.email
+  };
+  return {success:true};
+}
+
+async function logout(){
+  await supabase.auth.signOut();
+  currentUser = null;
+  userCache = { accounts:[], trades:[], strategies:[], goals:{}, notes:[], screenshots:[], settings:{theme:'dark',defaultRiskPercent:1,maxRiskPercent:2,preferredLots:0.1} };
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('auth-container').classList.remove('hidden');
+  showAuthView('login');
+}
 
 /* ===================== NAVIGATION ===================== */
 function navigate(page){
@@ -571,11 +559,12 @@ function navigate(page){
   }
   renderPage(page);
 }
+
 async function renderPage(page){
   const data = getUserData();
   if(!data) return;
   const main = document.getElementById('main-content');
-  Object.values(chartInstances).forEach(c => { try { c.destroy(); } catch {} });
+  Object.values(chartInstances).forEach(c => { try{c.destroy()}catch{} });
   chartInstances = {};
   let html = '';
   switch(page){
@@ -588,7 +577,7 @@ async function renderPage(page){
     case 'spin': html = renderSpin(data); break;
     case 'strategies': html = renderStrategies(data); break;
     case 'goals': html = renderGoals(data); break;
-    case 'gallery': html = renderGallery(data); break;
+    case 'gallery': html = await renderGallery(data); break;
     case 'reports': html = renderReports(data); break;
     case 'notes': html = renderNotes(data); break;
     case 'settings': html = renderSettings(data); break;
@@ -607,9 +596,9 @@ function renderDashboard(data){
   const stats = calculateStatistics(closed);
   const currency = getActiveAccount(data)?.currency || 'USD';
   const discipline = calcDisciplineThermometer(trades);
-  const recent = [...closed].sort((a, b) => new Date(b.closeTime || b.openTime) - new Date(a.closeTime || a.openTime)).slice(0, 6);
-  const thisMonth = new Date().toISOString().slice(0, 7);
-  const monthPL = closed.filter(t => (t.closeTime || '').startsWith(thisMonth)).reduce((s, t) => s + (t.netPL || 0), 0);
+  const recent = [...closed].sort((a,b)=>new Date(b.closeTime||b.openTime)-new Date(a.closeTime||a.openTime)).slice(0,6);
+  const thisMonth = new Date().toISOString().slice(0,7);
+  const monthPL = closed.filter(t=>(t.closeTime||'').startsWith(thisMonth)).reduce((s,t)=>s+(t.netPL||0),0);
   return `
   <div class="p-4 sm:p-6 max-w-7xl mx-auto">
     <div class="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -617,10 +606,10 @@ function renderDashboard(data){
       <button onclick="navigate('add-trade')" class="btn-primary text-sm">+ Log Trade</button>
     </div>
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-      <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Net P&amp;L</p><p class="text-xl font-bold mono ${plClass(stats.netPL)}">${formatCurrency(stats.netPL, currency)}</p><p class="text-[11px] text-surface-500 mt-1">${stats.totalTrades} closed trades</p></div>
+      <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Net P&amp;L</p><p class="text-xl font-bold mono ${plClass(stats.netPL)}">${formatCurrency(stats.netPL,currency)}</p><p class="text-[11px] text-surface-500 mt-1">${stats.totalTrades} closed trades</p></div>
       <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Win Rate</p><p class="text-xl font-bold mono">${stats.winRate.toFixed(1)}%</p><p class="text-[11px] text-surface-500 mt-1">${stats.wins}W / ${stats.losses}L</p></div>
-      <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Profit Factor</p><p class="text-xl font-bold mono">${stats.profitFactor === Infinity ? '∞' : (stats.profitFactor || 0).toFixed(2)}</p><p class="text-[11px] text-surface-500 mt-1">Expectancy ${formatCurrency(stats.expectancy, currency)}</p></div>
-      <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Month P&amp;L</p><p class="text-xl font-bold mono ${plClass(monthPL)}">${formatCurrency(monthPL, currency)}</p><p class="text-[11px] text-surface-500 mt-1">Max DD ${formatCurrency(stats.maxDrawdown, currency)}</p></div>
+      <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Profit Factor</p><p class="text-xl font-bold mono">${stats.profitFactor===Infinity?'∞':(stats.profitFactor||0).toFixed(2)}</p><p class="text-[11px] text-surface-500 mt-1">Expectancy ${formatCurrency(stats.expectancy,currency)}</p></div>
+      <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Month P&amp;L</p><p class="text-xl font-bold mono ${plClass(monthPL)}">${formatCurrency(monthPL,currency)}</p><p class="text-[11px] text-surface-500 mt-1">Max DD ${formatCurrency(stats.maxDrawdown,currency)}</p></div>
     </div>
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
       <div class="card lg:col-span-2"><h3 class="text-sm font-semibold mb-3">Equity Curve</h3><div class="h-52"><canvas id="dash-equity"></canvas></div></div>
@@ -628,17 +617,17 @@ function renderDashboard(data){
         <h3 class="text-sm font-semibold mb-3">Discipline (30d)</h3>
         <div class="discipline-thermo-track mb-3"><div class="discipline-thermo-marker" style="left:${discipline.markerPct}%"></div></div>
         <div class="flex justify-between text-xs text-surface-500 mono mb-3"><span>${discipline.showed} present</span><span>${discipline.missed} missed</span></div>
-        <div class="flex gap-1 overflow-x-auto">${discipline.days.slice(-21).map(d => `<div class="discipline-day ${d.status}" title="${d.date}"></div>`).join('')}</div>
-        <p class="text-[11px] text-surface-500 mt-3">Score ${discipline.score > 0 ? '+' : ''}${discipline.score}</p>
+        <div class="flex gap-1 overflow-x-auto">${discipline.days.slice(-21).map(d=>`<div class="discipline-day ${d.status}" title="${d.date}"></div>`).join('')}</div>
+        <p class="text-[11px] text-surface-500 mt-3">Score ${discipline.score>0?'+':''}${discipline.score}</p>
       </div>
     </div>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div class="card">
         <div class="flex items-center justify-between mb-3"><h3 class="text-sm font-semibold">Recent Trades</h3><button onclick="navigate('journal')" class="text-xs text-brand-400">View all</button></div>
-        ${recent.length === 0 ? '<p class="text-sm text-surface-500 text-center py-8">No trades yet</p>' : recent.map(t => `
+        ${recent.length===0?'<p class="text-sm text-surface-500 text-center py-8">No trades yet</p>':recent.map(t=>`
           <div class="flex items-center justify-between py-2.5 border-b border-surface-800 last:border-0 cursor-pointer hover:bg-surface-800/30 px-1 rounded" onclick="viewTrade('${t.id}')">
-            <div class="flex items-center gap-2"><span class="badge ${t.direction === 'buy' || t.direction === 'long' ? 'badge-long' : 'badge-short'}">${(t.direction || '').toUpperCase()}</span><span class="text-sm font-medium">${t.instrument}</span><span class="text-xs text-surface-500">${t.lots} lots</span></div>
-            ${formatPL(t.netPL, currency)}
+            <div class="flex items-center gap-2"><span class="badge ${t.direction==='buy'||t.direction==='long'?'badge-long':'badge-short'}">${(t.direction||'').toUpperCase()}</span><span class="text-sm font-medium">${t.instrument}</span><span class="text-xs text-surface-500">${t.lots} lots</span></div>
+            ${formatPL(t.netPL,currency)}
           </div>`).join('')}
       </div>
       <div class="card">
@@ -660,21 +649,21 @@ function renderAccounts(data){
   <div class="p-4 sm:p-6 max-w-5xl mx-auto">
     <div class="page-header flex items-center justify-between"><div><h1 class="text-xl sm:text-2xl font-bold">Trading Accounts</h1></div><button onclick="showAddAccountModal()" class="btn-primary text-sm">Add Account</button></div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-      ${accounts.length === 0 ? '<div class="card empty-state col-span-full">No accounts yet. Add your first trading account.</div>' : accounts.map(a => {
-        const aTrades = (data.trades || []).filter(t => t.accountId === a.id && t.status === 'closed');
-        const pl = aTrades.reduce((s, t) => s + (t.netPL || 0), 0);
-        return `<div class="card ${selectedAccountId === a.id ? 'ring-1 ring-brand-500/40' : ''}">
+      ${accounts.length===0?'<div class="card empty-state col-span-full">No accounts yet. Add your first trading account.</div>':accounts.map(a=>{
+        const aTrades=(data.trades||[]).filter(t=>t.accountId===a.id&&t.status==='closed');
+        const pl=aTrades.reduce((s,t)=>s+(t.netPL||0),0);
+        return `<div class="card ${selectedAccountId===a.id?'ring-1 ring-brand-500/40':''}">
           <div class="flex items-start justify-between mb-3">
-            <div><h3 class="font-semibold">${escapeHtml(a.name)}</h3><p class="text-xs text-surface-500">${escapeHtml(a.broker || '')} · ${a.currency}</p></div>
-            <span class="badge ${a.status === 'active' ? 'badge-profit' : 'badge-neutral'}">${a.status}</span>
+            <div><h3 class="font-semibold">${escapeHtml(a.name)}</h3><p class="text-xs text-surface-500">${escapeHtml(a.broker||'')} · ${a.currency}</p></div>
+            <span class="badge ${a.status==='active'?'badge-profit':'badge-neutral'}">${a.status}</span>
           </div>
           <div class="grid grid-cols-3 gap-2 mb-3">
-            <div class="text-center p-2 rounded-lg bg-surface-800/50"><p class="text-[10px] text-surface-500">Balance</p><p class="text-sm font-semibold mono">${formatCurrency(a.balance || 0, a.currency).replace('+', '')}</p></div>
-            <div class="text-center p-2 rounded-lg bg-surface-800/50"><p class="text-[10px] text-surface-500">P&amp;L</p><p class="text-sm font-semibold mono ${plClass(pl)}">${formatCurrency(pl, a.currency)}</p></div>
+            <div class="text-center p-2 rounded-lg bg-surface-800/50"><p class="text-[10px] text-surface-500">Balance</p><p class="text-sm font-semibold mono">${formatCurrency(a.balance||0,a.currency).replace('+','')}</p></div>
+            <div class="text-center p-2 rounded-lg bg-surface-800/50"><p class="text-[10px] text-surface-500">P&amp;L</p><p class="text-sm font-semibold mono ${plClass(pl)}">${formatCurrency(pl,a.currency)}</p></div>
             <div class="text-center p-2 rounded-lg bg-surface-800/50"><p class="text-[10px] text-surface-500">Trades</p><p class="text-sm font-semibold mono">${aTrades.length}</p></div>
           </div>
           <div class="flex gap-2">
-            <button onclick="selectAccount('${a.id}');renderPage('accounts')" class="btn-secondary text-xs flex-1">${selectedAccountId === a.id ? 'Selected' : 'Select'}</button>
+            <button onclick="selectAccount('${a.id}');renderPage('accounts')" class="btn-secondary text-xs flex-1">${selectedAccountId===a.id?'Selected':'Select'}</button>
             <button onclick="deleteAccount('${a.id}')" class="btn-ghost text-xs text-red-400">Delete</button>
           </div>
         </div>`;
@@ -682,6 +671,7 @@ function renderAccounts(data){
     </div>
   </div>`;
 }
+
 function showAddAccountModal(){
   showModal('Add Account', `
     <div class="form-group"><label class="form-label">Name</label><input id="acc-name" class="input-field" placeholder="Prop Firm Challenge"/></div>
@@ -690,27 +680,46 @@ function showAddAccountModal(){
     <div class="form-group"><label class="form-label">Starting Balance</label><input id="acc-balance" type="number" class="input-field" value="10000"/></div>
   `, `<button onclick="closeModal()" class="btn-secondary">Cancel</button><button onclick="addAccount()" class="btn-primary">Add</button>`);
 }
-function addAccount(){
-  const user = getCurrentUser();
+
+async function addAccount(){
   const name = document.getElementById('acc-name').value.trim();
-  if(!name) return showToast('Name required', 'error');
-  const accounts = Store.getAccounts(user.id);
-  accounts.push({id: generateId(), name, broker: document.getElementById('acc-broker').value.trim(), currency: document.getElementById('acc-currency').value, balance: parseFloat(document.getElementById('acc-balance').value) || 0, status: 'active', createdAt: new Date().toISOString()});
-  Store.saveAccounts(user.id, accounts);
-  closeModal(); updateAccountSelector(); showToast('Account added', 'success'); renderPage('accounts');
+  if(!name) return showToast('Name required','error');
+  const { error } = await supabase.from('trading_accounts').insert({
+    user_id: currentUser.id,
+    name,
+    broker: document.getElementById('acc-broker').value.trim(),
+    currency: document.getElementById('acc-currency').value,
+    balance: parseFloat(document.getElementById('acc-balance').value)||0,
+    status: 'active'
+  });
+  if(error) return showToast(error.message,'error');
+  closeModal();
+  await loadAllUserData();
+  updateAccountSelector();
+  showToast('Account added','success');
+  renderPage('accounts');
 }
-function deleteAccount(id){
-  confirmDialog('Delete Account', 'Trades stay but lose account link. Continue?', () => {
-    const user = getCurrentUser();
-    Store.saveAccounts(user.id, Store.getAccounts(user.id).filter(a => a.id !== id));
-    if(selectedAccountId === id){ selectedAccountId = 'all'; localStorage.setItem('apexledger_selected_account', 'all'); }
-    updateAccountSelector(); showToast('Account deleted', 'success'); renderPage('accounts');
-  }, 'Delete', true);
+
+async function deleteAccount(id){
+  confirmDialog('Delete Account','Trades stay but lose account link. Continue?', async ()=>{
+    const { error } = await supabase.from('trading_accounts').delete().eq('id',id);
+    if(error) return showToast(error.message,'error');
+    if(selectedAccountId===id){ selectedAccountId='all'; localStorage.setItem('apexledger_selected_account','all'); }
+    await loadAllUserData();
+    updateAccountSelector();
+    showToast('Account deleted','success');
+    renderPage('accounts');
+  },'Delete',true);
 }
-function selectAccount(id){ selectedAccountId = id; localStorage.setItem('apexledger_selected_account', id); updateAccountSelector(); }
+
+function selectAccount(id){
+  selectedAccountId = id;
+  localStorage.setItem('apexledger_selected_account',id);
+  updateAccountSelector();
+}
 
 function renderJournal(data){
-  const trades = getFilteredTrades(data).slice().sort((a, b) => new Date(b.openTime || 0) - new Date(a.openTime || 0));
+  const trades = getFilteredTrades(data).slice().sort((a,b)=>new Date(b.openTime||0)-new Date(a.openTime||0));
   const currency = getActiveAccount(data)?.currency || 'USD';
   const stats = calculateStatistics(trades);
   return `
@@ -720,26 +729,26 @@ function renderJournal(data){
       <button onclick="navigate('add-trade')" class="btn-primary text-sm">+ Log Trade</button>
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
-      <div class="stat-card py-3"><p class="text-[10px] uppercase text-surface-500">Net P&amp;L</p><p class="font-bold mono ${plClass(stats.netPL)}">${formatCurrency(stats.netPL, currency)}</p></div>
+      <div class="stat-card py-3"><p class="text-[10px] uppercase text-surface-500">Net P&amp;L</p><p class="font-bold mono ${plClass(stats.netPL)}">${formatCurrency(stats.netPL,currency)}</p></div>
       <div class="stat-card py-3"><p class="text-[10px] uppercase text-surface-500">Win Rate</p><p class="font-bold mono">${stats.winRate.toFixed(0)}%</p></div>
-      <div class="stat-card py-3"><p class="text-[10px] uppercase text-surface-500">Profit Factor</p><p class="font-bold mono">${stats.profitFactor === Infinity ? '∞' : (stats.profitFactor || 0).toFixed(2)}</p></div>
-      <div class="stat-card py-3"><p class="text-[10px] uppercase text-surface-500">Expectancy</p><p class="font-bold mono">${formatCurrency(stats.expectancy, currency)}</p></div>
+      <div class="stat-card py-3"><p class="text-[10px] uppercase text-surface-500">Profit Factor</p><p class="font-bold mono">${stats.profitFactor===Infinity?'∞':(stats.profitFactor||0).toFixed(2)}</p></div>
+      <div class="stat-card py-3"><p class="text-[10px] uppercase text-surface-500">Expectancy</p><p class="font-bold mono">${formatCurrency(stats.expectancy,currency)}</p></div>
     </div>
     <div class="card overflow-x-auto">
-      ${trades.length === 0 ? '<div class="empty-state">No trades yet. Log your first trade.</div>' : `
+      ${trades.length===0?'<div class="empty-state">No trades yet. Log your first trade.</div>':`
       <table class="data-table">
         <thead><tr><th>Date</th><th>Instrument</th><th>Dir</th><th>Lots</th><th>Entry</th><th>Exit</th><th>Pips</th><th>P&amp;L</th><th>Strategy</th><th></th></tr></thead>
-        <tbody>${trades.map(t => `
+        <tbody>${trades.map(t=>`
           <tr class="cursor-pointer" onclick="viewTrade('${t.id}')">
             <td class="text-xs">${formatDate(t.openTime)}</td>
             <td class="font-medium">${t.instrument}</td>
-            <td><span class="badge ${t.direction === 'buy' || t.direction === 'long' ? 'badge-long' : 'badge-short'}">${(t.direction || '').slice(0, 1).toUpperCase()}</span></td>
+            <td><span class="badge ${t.direction==='buy'||t.direction==='long'?'badge-long':'badge-short'}">${(t.direction||'').slice(0,1).toUpperCase()}</span></td>
             <td class="mono">${t.lots}</td>
             <td class="mono text-xs">${t.entryPrice}</td>
-            <td class="mono text-xs">${t.exitPrice ?? '—'}</td>
-            <td class="mono ${plClass(t.pips)}">${t.pips ?? '—'}</td>
-            <td>${formatPL(t.netPL, currency)}</td>
-            <td class="text-xs text-surface-400">${t.strategy || '—'}</td>
+            <td class="mono text-xs">${t.exitPrice??'—'}</td>
+            <td class="mono ${plClass(t.pips)}">${t.pips??'—'}</td>
+            <td>${formatPL(t.netPL,currency)}</td>
+            <td class="text-xs text-surface-400">${t.strategy||'—'}</td>
             <td><button onclick="event.stopPropagation();deleteTrade('${t.id}')" class="btn-ghost text-xs text-red-400">×</button></td>
           </tr>`).join('')}
         </tbody>
@@ -747,39 +756,42 @@ function renderJournal(data){
     </div>
   </div>`;
 }
+
 function viewTrade(id){
   const data = getUserData();
-  const t = (data.trades || []).find(x => x.id === id);
+  const t = (data.trades||[]).find(x=>x.id===id);
   if(!t) return;
   const currency = getActiveAccount(data)?.currency || 'USD';
   showModal('Trade Detail', `
     <div class="space-y-2 text-sm">
       <div class="flex justify-between"><span class="text-surface-400">Instrument</span><span class="font-medium">${t.instrument}</span></div>
-      <div class="flex justify-between"><span class="text-surface-400">Direction</span><span class="badge ${t.direction === 'buy' || t.direction === 'long' ? 'badge-long' : 'badge-short'}">${t.direction}</span></div>
+      <div class="flex justify-between"><span class="text-surface-400">Direction</span><span class="badge ${t.direction==='buy'||t.direction==='long'?'badge-long':'badge-short'}">${t.direction}</span></div>
       <div class="flex justify-between"><span class="text-surface-400">Lots</span><span class="mono">${t.lots}</span></div>
-      <div class="flex justify-between"><span class="text-surface-400">Entry / Exit</span><span class="mono">${t.entryPrice} → ${t.exitPrice ?? 'open'}</span></div>
-      <div class="flex justify-between"><span class="text-surface-400">Pips</span><span class="mono ${plClass(t.pips)}">${t.pips ?? '—'}</span></div>
-      <div class="flex justify-between"><span class="text-surface-400">Net P&amp;L</span>${formatPL(t.netPL, currency)}</div>
-      <div class="flex justify-between"><span class="text-surface-400">Strategy</span><span>${t.strategy || '—'}</span></div>
-      <div class="flex justify-between"><span class="text-surface-400">Session</span><span>${t.session || '—'}</span></div>
-      <div class="flex justify-between"><span class="text-surface-400">Emotion</span><span>${t.emotionalState || '—'}</span></div>
-      ${t.setupQuality ? `<div class="flex justify-between"><span class="text-surface-400">Setup Quality</span><span>${t.setupQuality}</span></div>` : ''}
-      ${t.rMultiple != null ? `<div class="flex justify-between"><span class="text-surface-400">R-Multiple</span><span class="mono">${t.rMultiple}</span></div>` : ''}
-      ${t.notes ? `<div class="pt-2 border-t border-surface-800"><p class="text-surface-400 text-xs mb-1">Notes</p><p>${escapeHtml(t.notes)}</p></div>` : ''}
+      <div class="flex justify-between"><span class="text-surface-400">Entry / Exit</span><span class="mono">${t.entryPrice} → ${t.exitPrice??'open'}</span></div>
+      <div class="flex justify-between"><span class="text-surface-400">Pips</span><span class="mono ${plClass(t.pips)}">${t.pips??'—'}</span></div>
+      <div class="flex justify-between"><span class="text-surface-400">Net P&amp;L</span>${formatPL(t.netPL,currency)}</div>
+      <div class="flex justify-between"><span class="text-surface-400">Strategy</span><span>${t.strategy||'—'}</span></div>
+      <div class="flex justify-between"><span class="text-surface-400">Session</span><span>${t.session||'—'}</span></div>
+      <div class="flex justify-between"><span class="text-surface-400">Emotion</span><span>${t.emotionalState||'—'}</span></div>
+      ${t.setupQuality?`<div class="flex justify-between"><span class="text-surface-400">Setup Quality</span><span>${t.setupQuality}</span></div>`:''}
+      ${t.rMultiple!=null?`<div class="flex justify-between"><span class="text-surface-400">R-Multiple</span><span class="mono">${t.rMultiple}</span></div>`:''}
+      ${t.notes?`<div class="pt-2 border-t border-surface-800"><p class="text-surface-400 text-xs mb-1">Notes</p><p>${escapeHtml(t.notes)}</p></div>`:''}
     </div>
   `, `<button onclick="closeModal()" class="btn-secondary">Close</button>`);
 }
-function deleteTrade(id){
-  confirmDialog('Delete Trade', 'Remove this trade permanently?', () => {
-    const user = getCurrentUser();
-    Store.saveTrades(user.id, Store.getTrades(user.id).filter(t => t.id !== id));
-    showToast('Trade deleted', 'success');
+
+async function deleteTrade(id){
+  confirmDialog('Delete Trade','Remove this trade permanently?', async ()=>{
+    const { error } = await supabase.from('trades').delete().eq('id',id);
+    if(error) return showToast(error.message,'error');
+    await loadAllUserData();
+    showToast('Trade deleted','success');
     renderPage(currentPage);
-  }, 'Delete', true);
+  },'Delete',true);
 }
 
 function renderAddTrade(data){
-  const accounts = data.accounts.filter(a => a.status === 'active');
+  const accounts = data.accounts.filter(a=>a.status==='active');
   const strategies = data.strategies || [];
   const settings = data.settings || {};
   return `
@@ -789,12 +801,12 @@ function renderAddTrade(data){
       <div class="card">
         <h3 class="text-sm font-semibold mb-3">Setup</h3>
         <div class="form-row">
-          <div class="form-group"><label class="form-label">Account</label><select id="t-account" class="input-field">${accounts.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('')}</select></div>
-          <div class="form-group"><label class="form-label">Instrument</label><select id="t-instrument" class="input-field">${Object.keys(INSTRUMENTS).map(k => `<option value="${k}">${INSTRUMENTS[k].name}</option>`).join('')}</select></div>
+          <div class="form-group"><label class="form-label">Account</label><select id="t-account" class="input-field">${accounts.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('')}</select></div>
+          <div class="form-group"><label class="form-label">Instrument</label><select id="t-instrument" class="input-field">${Object.keys(INSTRUMENTS).map(k=>`<option value="${k}">${INSTRUMENTS[k].name}</option>`).join('')}</select></div>
         </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Direction</label><select id="t-direction" class="input-field"><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select></div>
-          <div class="form-group"><label class="form-label">Lots</label><input id="t-lots" type="number" step="0.01" class="input-field" value="${settings.preferredLots || 0.1}"/></div>
+          <div class="form-group"><label class="form-label">Lots</label><input id="t-lots" type="number" step="0.01" class="input-field" value="${settings.preferredLots||0.1}"/></div>
         </div>
       </div>
       <div class="card">
@@ -830,10 +842,9 @@ function renderAddTrade(data){
           </div>
           <select id="t-strategy" class="input-field">
             <option value="">— Select strategy —</option>
-            ${strategies.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join('')}
+            ${strategies.map(s=>`<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join('')}
           </select>
           <div id="strategy-preview" class="hidden mt-2 p-2.5 rounded-lg bg-surface-800/50 border border-surface-800 text-xs text-surface-400"></div>
-          ${strategies.length === 0 ? `<p class="text-[11px] text-surface-500 mt-1.5">No strategies yet. <button type="button" onclick="showQuickAddStrategy()" class="text-brand-400 underline">Create one</button> or add from templates in Strategies.</p>` : ''}
         </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Session</label><select id="t-session" class="input-field"><option>London</option><option>New York</option><option>Asia</option><option>Overlap</option><option>Sydney</option></select></div>
@@ -841,7 +852,7 @@ function renderAddTrade(data){
         </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Setup Quality</label><select id="t-quality" class="input-field"><option value="">—</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>Impulse</option></select></div>
-          <div class="form-group"><label class="form-label">R-Multiple (planned or realized)</label><input id="t-rmult" type="number" step="0.1" class="input-field" placeholder="e.g. 2.0"/></div>
+          <div class="form-group"><label class="form-label">R-Multiple</label><input id="t-rmult" type="number" step="0.1" class="input-field" placeholder="e.g. 2.0"/></div>
         </div>
         <div class="form-group">
           <label class="form-label">Status</label>
@@ -859,7 +870,7 @@ function renderAddTrade(data){
             <span class="context-chip" data-tag="Reversal">Reversal</span>
           </div>
         </div>
-        <div class="form-group"><label class="form-label">Process / Lesson notes</label><textarea id="t-notes" class="input-field" rows="3" placeholder="Why this trade? What was the plan? What will you do differently?"></textarea></div>
+        <div class="form-group"><label class="form-label">Process / Lesson notes</label><textarea id="t-notes" class="input-field" rows="3" placeholder="Why this trade? What was the plan?"></textarea></div>
         <div class="form-group"><label class="form-label">Screenshot (optional)</label><input id="t-shot" type="file" accept="image/*" class="input-field"/></div>
       </div>
       <div class="flex justify-end gap-2 sticky bottom-0 py-3 bg-surface-950/90 backdrop-blur">
@@ -869,149 +880,141 @@ function renderAddTrade(data){
     </form>
   </div>`;
 }
+
 function wireAddTradeForm(data){
   const form = document.getElementById('trade-form');
   if(!form) return;
-
-  // Tag chips
   const selectedTags = new Set();
-  document.querySelectorAll('#context-tags .context-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      const tag = chip.dataset.tag;
-      if(selectedTags.has(tag)){ selectedTags.delete(tag); chip.classList.remove('active'); }
-      else { selectedTags.add(tag); chip.classList.add('active'); }
+  document.querySelectorAll('#context-tags .context-chip').forEach(chip=>{
+    chip.addEventListener('click',()=>{
+      const tag=chip.dataset.tag;
+      if(selectedTags.has(tag)){selectedTags.delete(tag);chip.classList.remove('active')}
+      else{selectedTags.add(tag);chip.classList.add('active')}
     });
   });
 
-  // Strategy dropdown ↔ Strategies section sync + preview
   const strategySelect = document.getElementById('t-strategy');
   const strategyPreview = document.getElementById('strategy-preview');
   const strategyMap = {};
-  (data.strategies || []).forEach(s => { strategyMap[s.name] = s; });
+  (data.strategies||[]).forEach(s=>strategyMap[s.name]=s);
 
   function updateStrategyPreview(){
     const name = strategySelect?.value;
-    if(!name || !strategyMap[name]){
-      if(strategyPreview){ strategyPreview.classList.add('hidden'); strategyPreview.innerHTML = ''; }
-      return;
-    }
+    if(!name || !strategyMap[name]){ if(strategyPreview){strategyPreview.classList.add('hidden');strategyPreview.innerHTML=''} return; }
     const s = strategyMap[name];
-    const summary = s.summary || s.description || '';
-    const details = s.details || '';
-    const markets = s.markets || '';
-    const tfs = s.timeframes || '';
     strategyPreview.classList.remove('hidden');
     strategyPreview.innerHTML = `
       <p class="font-medium text-surface-300 mb-0.5">${escapeHtml(s.name)}</p>
-      ${summary ? `<p class="mb-1">${escapeHtml(summary)}</p>` : ''}
-      ${details ? `<p class="text-surface-500 line-clamp-2">${escapeHtml(details)}</p>` : ''}
-      ${(markets || tfs) ? `<p class="mt-1.5 text-[10px] text-surface-500">${markets ? 'Markets: ' + escapeHtml(markets) : ''}${markets && tfs ? ' · ' : ''}${tfs ? 'TF: ' + escapeHtml(tfs) : ''}</p>` : ''}
+      ${s.summary?`<p class="mb-1">${escapeHtml(s.summary)}</p>`:''}
+      ${s.details?`<p class="text-surface-500 line-clamp-2">${escapeHtml(s.details)}</p>`:''}
     `;
   }
-  strategySelect?.addEventListener('change', updateStrategyPreview);
+  strategySelect?.addEventListener('change',updateStrategyPreview);
   updateStrategyPreview();
 
-  const updateLive = () => {
-    const inst = document.getElementById('t-instrument').value;
-    const dir = document.getElementById('t-direction').value;
-    const lots = parseFloat(document.getElementById('t-lots').value) || 0;
-    const entry = parseFloat(document.getElementById('t-entry').value);
-    const exit = parseFloat(document.getElementById('t-exit').value);
-    const sl = parseFloat(document.getElementById('t-sl').value);
-    const comm = parseFloat(document.getElementById('t-comm').value) || 0;
-    const swap = parseFloat(document.getElementById('t-swap').value) || 0;
-    const spec = INSTRUMENTS[inst];
-    if(spec){
-      document.getElementById('live-spec').textContent = `${spec.name} · 1 pip = ${spec.pipSize} · ≈ $${spec.pipValue}/pip per 1.00 lot`;
-    }
-    if(!entry || isNaN(entry) || !exit || isNaN(exit)){
-      document.getElementById('live-pips').textContent = '—';
-      document.getElementById('live-pl').textContent = '—';
+  const updateLive = ()=>{
+    const inst=document.getElementById('t-instrument').value;
+    const dir=document.getElementById('t-direction').value;
+    const lots=parseFloat(document.getElementById('t-lots').value)||0;
+    const entry=parseFloat(document.getElementById('t-entry').value);
+    const exit=parseFloat(document.getElementById('t-exit').value);
+    const sl=parseFloat(document.getElementById('t-sl').value);
+    const comm=parseFloat(document.getElementById('t-comm').value)||0;
+    const swap=parseFloat(document.getElementById('t-swap').value)||0;
+    const spec=INSTRUMENTS[inst];
+    if(spec) document.getElementById('live-spec').textContent = `${spec.name} · 1 pip = ${spec.pipSize} · ≈ $${spec.pipValue}/pip per 1.00 lot`;
+    if(!entry||isNaN(entry)||!exit||isNaN(exit)){
+      document.getElementById('live-pips').textContent='—';
+      document.getElementById('live-pl').textContent='—';
     } else {
-      const pips = calcPips(inst, entry, exit, dir);
-      const pl = calcNetPL(inst, lots, pips, comm, swap);
-      document.getElementById('live-pips').textContent = pips;
-      document.getElementById('live-pips').className = 'mono ' + (pips >= 0 ? 'text-profit' : 'text-loss');
-      document.getElementById('live-pl').textContent = formatCurrency(pl);
-      document.getElementById('live-pl').className = 'mono ' + (pl >= 0 ? 'text-profit' : 'text-loss');
+      const pips=calcPips(inst,entry,exit,dir);
+      const pl=calcNetPL(inst,lots,pips,comm,swap);
+      document.getElementById('live-pips').textContent=pips;
+      document.getElementById('live-pips').className='mono '+(pips>=0?'text-profit':'text-loss');
+      document.getElementById('live-pl').textContent=formatCurrency(pl);
+      document.getElementById('live-pl').className='mono '+(pl>=0?'text-profit':'text-loss');
     }
-    if(entry && !isNaN(entry) && sl && !isNaN(sl)){
-      const risk = calcRiskAmount(inst, lots, entry, sl, dir);
-      document.getElementById('live-risk').textContent = risk != null ? formatCurrency(risk) : '—';
-      document.getElementById('live-risk').className = 'mono text-loss';
-    } else {
-      document.getElementById('live-risk').textContent = '—';
-    }
+    if(entry&&!isNaN(entry)&&sl&&!isNaN(sl)){
+      const risk=calcRiskAmount(inst,lots,entry,sl,dir);
+      document.getElementById('live-risk').textContent=risk!=null?formatCurrency(risk):'—';
+      document.getElementById('live-risk').className='mono text-loss';
+    } else document.getElementById('live-risk').textContent='—';
   };
-  ['t-instrument', 't-direction', 't-lots', 't-entry', 't-exit', 't-sl', 't-comm', 't-swap'].forEach(id => {
-    document.getElementById(id)?.addEventListener('input', updateLive);
-    document.getElementById(id)?.addEventListener('change', updateLive);
+  ['t-instrument','t-direction','t-lots','t-entry','t-exit','t-sl','t-comm','t-swap'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input',updateLive);
+    document.getElementById(id)?.addEventListener('change',updateLive);
   });
   updateLive();
 
-  form.addEventListener('submit', async e => {
+  form.addEventListener('submit', async e=>{
     e.preventDefault();
-    const user = getCurrentUser();
-    const inst = document.getElementById('t-instrument').value;
-    const dir = document.getElementById('t-direction').value;
-    const lots = parseFloat(document.getElementById('t-lots').value) || 0;
-    const entry = parseFloat(document.getElementById('t-entry').value);
-    const exitVal = document.getElementById('t-exit').value;
-    const exit = exitVal ? parseFloat(exitVal) : null;
-    const comm = parseFloat(document.getElementById('t-comm').value) || 0;
-    const swap = parseFloat(document.getElementById('t-swap').value) || 0;
-    const status = document.getElementById('t-status').value;
-    if(!entry || isNaN(entry)) return showToast('Entry price required', 'error');
-    let pips = null, netPL = null;
-    if(exit != null && !isNaN(exit)){
-      pips = calcPips(inst, entry, exit, dir);
-      netPL = calcNetPL(inst, lots, pips, comm, swap);
+    const inst=document.getElementById('t-instrument').value;
+    const dir=document.getElementById('t-direction').value;
+    const lots=parseFloat(document.getElementById('t-lots').value)||0;
+    const entry=parseFloat(document.getElementById('t-entry').value);
+    const exitVal=document.getElementById('t-exit').value;
+    const exit=exitVal?parseFloat(exitVal):null;
+    const comm=parseFloat(document.getElementById('t-comm').value)||0;
+    const swap=parseFloat(document.getElementById('t-swap').value)||0;
+    const status=document.getElementById('t-status').value;
+    if(!entry||isNaN(entry)) return showToast('Entry price required','error');
+
+    let pips=null, netPL=null;
+    if(exit!=null&&!isNaN(exit)){
+      pips=calcPips(inst,entry,exit,dir);
+      netPL=calcNetPL(inst,lots,pips,comm,swap);
     }
-    let notes = document.getElementById('t-notes').value.trim();
+    let notes=document.getElementById('t-notes').value.trim();
     if(selectedTags.size){
-      const tagStr = [...selectedTags].join(', ');
-      notes = notes ? `[${tagStr}] ${notes}` : `[${tagStr}]`;
+      const tagStr=[...selectedTags].join(', ');
+      notes=notes?`[${tagStr}] ${notes}`:`[${tagStr}]`;
     }
-    const rMultRaw = document.getElementById('t-rmult').value;
-    const trade = {
-      id: generateId(),
-      accountId: document.getElementById('t-account').value,
+    const rMultRaw=document.getElementById('t-rmult').value;
+
+    const { data: inserted, error } = await supabase.from('trades').insert({
+      user_id: currentUser.id,
+      account_id: document.getElementById('t-account').value || null,
       instrument: inst,
       direction: dir,
       lots,
-      entryPrice: entry,
-      exitPrice: exit,
-      stopLoss: parseFloat(document.getElementById('t-sl').value) || null,
-      takeProfit: parseFloat(document.getElementById('t-tp').value) || null,
+      entry_price: entry,
+      exit_price: exit,
+      stop_loss: parseFloat(document.getElementById('t-sl').value)||null,
+      take_profit: parseFloat(document.getElementById('t-tp').value)||null,
       pips,
-      netPL,
+      net_pl: netPL,
       commission: comm,
       swap,
       status,
       strategy: document.getElementById('t-strategy').value,
       session: document.getElementById('t-session').value,
-      emotionalState: document.getElementById('t-emotion').value,
-      setupQuality: document.getElementById('t-quality').value || null,
-      rMultiple: rMultRaw !== '' ? parseFloat(rMultRaw) : null,
+      emotional_state: document.getElementById('t-emotion').value,
+      setup_quality: document.getElementById('t-quality').value||null,
+      r_multiple: rMultRaw!==''?parseFloat(rMultRaw):null,
       notes,
-      openTime: new Date().toISOString(),
-      closeTime: status === 'closed' ? new Date().toISOString() : null,
-      createdAt: new Date().toISOString()
-    };
-    const trades = Store.getTrades(user.id);
-    trades.push(trade);
-    Store.saveTrades(user.id, trades);
+      open_time: new Date().toISOString(),
+      close_time: status==='closed'?new Date().toISOString():null
+    }).select().single();
+
+    if(error) return showToast(error.message,'error');
+
+    // Screenshot upload to Supabase Storage
     const file = document.getElementById('t-shot').files[0];
-    if(file && file.size < 1.5 * 1024 * 1024){
-      const reader = new FileReader();
-      reader.onload = () => {
-        const shots = Store.getScreenshots(user.id);
-        shots.push({id: generateId(), tradeId: trade.id, data: reader.result, name: file.name, createdAt: new Date().toISOString()});
-        Store.saveScreenshots(user.id, shots);
-      };
-      reader.readAsDataURL(file);
+    if(file && file.size < 1.5*1024*1024){
+      const path = `${currentUser.id}/${inserted.id}_${Date.now()}.jpg`;
+      const { error: upErr } = await supabase.storage.from('screenshots').upload(path, file, { contentType: file.type });
+      if(!upErr){
+        await supabase.from('screenshots').insert({
+          user_id: currentUser.id,
+          trade_id: inserted.id,
+          storage_path: path,
+          name: file.name
+        });
+      }
     }
-    showToast('Trade saved', 'success');
+
+    showToast('Trade saved','success');
+    await loadAllUserData();
     navigate('journal');
   });
 }
@@ -1082,54 +1085,26 @@ function initCharts(page, data){
   }
 }
 
-let calendarYear = new Date().getFullYear(), calendarMonth = new Date().getMonth(), calendarSelectedDay = null;
+let calendarYear = new Date().getFullYear(), calendarMonth = new Date().getMonth();
 function renderCalendar(data){
   const trades = getFilteredTrades(data).filter(t => t.status === 'closed');
   const daily = {};
   trades.forEach(t => {
     const d = (t.closeTime || t.openTime || '').slice(0, 10);
     if(!d) return;
-    if(!daily[d]) daily[d] = {netPL: 0, trades: 0, wins: 0};
+    if(!daily[d]) daily[d] = {netPL: 0, trades: 0};
     daily[d].netPL += t.netPL || 0;
     daily[d].trades++;
-    if(isWinPL(t.netPL)) daily[d].wins++;
   });
   const currency = getActiveAccount(data)?.currency || 'USD';
   const today = new Date().toISOString().slice(0, 10);
   const prefix = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}`;
   const monthName = new Date(calendarYear, calendarMonth, 1).toLocaleString('en-US', {month: 'long', year: 'numeric'});
 
-  // Month totals
   let monthPL = 0, monthTrades = 0;
   Object.keys(daily).forEach(d => {
-    if(d.startsWith(prefix)){
-      monthPL += daily[d].netPL;
-      monthTrades += daily[d].trades;
-    }
+    if(d.startsWith(prefix)){ monthPL += daily[d].netPL; monthTrades += daily[d].trades; }
   });
-
-  // Weekly totals for weeks that intersect the current month view
-  const weekMap = {}; // key -> {pl, trades, startLabel}
-  Object.keys(daily).forEach(d => {
-    if(!d.startsWith(prefix) && !isDateInAdjacentWeek(d, calendarYear, calendarMonth)) return;
-    const wk = getISOWeekKey(d);
-    if(!weekMap[wk]) weekMap[wk] = {netPL: 0, trades: 0, days: []};
-    weekMap[wk].netPL += daily[d].netPL;
-    weekMap[wk].trades += daily[d].trades;
-    weekMap[wk].days.push(d);
-  });
-
-  // Current week (based on today if viewing current month, else first week of month)
-  const refDate = (calendarYear === new Date().getFullYear() && calendarMonth === new Date().getMonth())
-    ? new Date()
-    : new Date(calendarYear, calendarMonth, 15);
-  const currentWeekKey = getISOWeekKey(refDate.toISOString().slice(0, 10));
-  const weekPL = weekMap[currentWeekKey]?.netPL || 0;
-  const weekTrades = weekMap[currentWeekKey]?.trades || 0;
-
-  // Today's P/L
-  const todayPL = daily[today]?.netPL || 0;
-  const todayTrades = daily[today]?.trades || 0;
 
   const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
   const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
@@ -1151,11 +1126,6 @@ function renderCalendar(data){
     </div>`;
   }
 
-  // Build compact weekly summary list for the month
-  const weekEntries = Object.entries(weekMap)
-    .filter(([k]) => k.startsWith(String(calendarYear)) || true)
-    .sort((a, b) => a[0].localeCompare(b[0]));
-
   return `
   <div class="p-4 sm:p-6 max-w-5xl mx-auto">
     <div class="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1166,64 +1136,18 @@ function renderCalendar(data){
         <button class="btn-secondary text-sm px-3" onclick="changeCalMonth(1)">›</button>
       </div>
     </div>
-
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-      <div class="stat-card py-3">
-        <p class="text-xs text-surface-500">Today P&amp;L</p>
-        <p class="text-lg font-bold mono ${plClass(todayPL)}">${formatCurrency(todayPL, currency)}</p>
-        <p class="text-[11px] text-surface-500 mt-0.5">${todayTrades} trade${todayTrades === 1 ? '' : 's'}</p>
-      </div>
-      <div class="stat-card py-3">
-        <p class="text-xs text-surface-500">This Week P&amp;L</p>
-        <p class="text-lg font-bold mono ${plClass(weekPL)}">${formatCurrency(weekPL, currency)}</p>
-        <p class="text-[11px] text-surface-500 mt-0.5">${weekTrades} trade${weekTrades === 1 ? '' : 's'} · ${currentWeekKey}</p>
-      </div>
-      <div class="stat-card py-3">
-        <p class="text-xs text-surface-500">Month P&amp;L</p>
-        <p class="text-lg font-bold mono ${plClass(monthPL)}">${formatCurrency(monthPL, currency)}</p>
-        <p class="text-[11px] text-surface-500 mt-0.5">${monthTrades} trades</p>
-      </div>
-      <div class="stat-card py-3">
-        <p class="text-xs text-surface-500">Month Trades</p>
-        <p class="text-lg font-bold mono">${monthTrades}</p>
-        <p class="text-[11px] text-surface-500 mt-0.5">${Object.keys(daily).filter(d => d.startsWith(prefix)).length} active days</p>
-      </div>
+    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+      <div class="stat-card py-3"><p class="text-xs text-surface-500">Month P&amp;L</p><p class="text-lg font-bold mono ${plClass(monthPL)}">${formatCurrency(monthPL, currency)}</p></div>
+      <div class="stat-card py-3"><p class="text-xs text-surface-500">Month Trades</p><p class="text-lg font-bold mono">${monthTrades}</p></div>
+      <div class="stat-card py-3"><p class="text-xs text-surface-500">Active Days</p><p class="text-lg font-bold mono">${Object.keys(daily).filter(d => d.startsWith(prefix)).length}</p></div>
     </div>
-
     <div class="card mb-4">
       <h3 class="text-center font-semibold mb-4">${monthName}</h3>
       <div class="grid grid-cols-7 gap-1 text-center mb-2">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="text-xs text-surface-500 py-1">${d}</div>`).join('')}</div>
       <div class="grid grid-cols-7 gap-1.5">${cells}</div>
     </div>
-
-    ${weekEntries.length ? `
-    <div class="card mb-4">
-      <h3 class="text-sm font-semibold mb-3">Weekly P&amp;L (visible weeks)</h3>
-      <div class="space-y-2">
-        ${weekEntries.map(([wk, info]) => `
-          <div class="flex items-center justify-between py-2 border-b border-surface-800 last:border-0">
-            <div>
-              <span class="text-sm font-medium mono">${wk}</span>
-              <span class="text-xs text-surface-500 ml-2">${info.trades} trade${info.trades === 1 ? '' : 's'}</span>
-            </div>
-            <span class="mono font-semibold ${plClass(info.netPL)}">${formatCurrency(info.netPL, currency)}</span>
-          </div>`).join('')}
-      </div>
-    </div>` : ''}
-
     <div id="day-detail" class="mt-4"></div>
   </div>`;
-}
-function isDateInAdjacentWeek(dateStr, year, month){
-  // include days from previous/next month that belong to weeks overlapping the viewed month
-  const d = new Date(dateStr + 'T12:00:00');
-  const first = new Date(year, month, 1);
-  const last = new Date(year, month + 1, 0);
-  const rangeStart = new Date(first);
-  rangeStart.setDate(first.getDate() - 7);
-  const rangeEnd = new Date(last);
-  rangeEnd.setDate(last.getDate() + 7);
-  return d >= rangeStart && d <= rangeEnd;
 }
 function changeCalMonth(delta){
   calendarMonth += delta;
@@ -1346,7 +1270,7 @@ function renderStrategies(data){
     `<div class="space-y-3">${list.map(s => {
       const st = trades.filter(t => t.strategy === s.name);
       const stats = calculateStatistics(st);
-      return `<div class="card"><div class="flex justify-between items-start mb-3"><div><h3 class="font-semibold">${escapeHtml(s.name)}</h3><p class="text-sm text-surface-400 mt-1">${escapeHtml(s.summary || s.description || '')}</p>${(s.markets || s.timeframes) ? `<p class="text-[11px] text-surface-500 mt-1">${s.markets ? escapeHtml(s.markets) : ''}${s.markets && s.timeframes ? ' · ' : ''}${s.timeframes ? escapeHtml(s.timeframes) : ''}</p>` : ''}</div><button onclick="deleteStrategy('${s.id}')" class="btn-ghost text-xs text-red-400">Delete</button></div>
+      return `<div class="card"><div class="flex justify-between items-start mb-3"><div><h3 class="font-semibold">${escapeHtml(s.name)}</h3><p class="text-sm text-surface-400 mt-1">${escapeHtml(s.summary || '')}</p></div><button onclick="deleteStrategy('${s.id}')" class="btn-ghost text-xs text-red-400">Delete</button></div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">${[['Net P&L', formatCurrency(stats.netPL, currency), plClass(stats.netPL)], ['Win rate', st.length ? stats.winRate.toFixed(0) + '%' : '—', ''], ['PF', stats.profitFactor === Infinity ? '∞' : (stats.profitFactor || 0).toFixed(2), ''], ['Trades', st.length, '']].map(([l, v, c]) => `<div class="p-2 rounded-lg bg-surface-800/40"><p class="text-[10px] text-surface-500">${l}</p><p class="text-sm font-semibold mono ${c}">${v}</p></div>`).join('')}</div></div>`;
     }).join('')}</div>
     <div class="mt-4 flex flex-wrap gap-2"><span class="text-xs text-surface-500">Templates:</span>${Object.keys(STRATEGY_TEMPLATES).map(n => `<button class="btn-secondary text-xs" onclick="addStrategyFromTemplate('${n}')">+ ${n}</button>`).join('')}</div>`}
@@ -1355,116 +1279,47 @@ function renderStrategies(data){
 function showAddStrategyModal(){
   showModal('Add Strategy', `
     <div class="form-group"><label class="form-label">Name</label><input id="strat-name" class="input-field" placeholder="e.g. London Breakout"/></div>
-    <div class="form-group"><label class="form-label">Summary</label><textarea id="strat-sum" class="input-field" rows="2" placeholder="One-line rule set"></textarea></div>
-    <div class="form-group"><label class="form-label">Playbook details</label><textarea id="strat-det" class="input-field" rows="4" placeholder="Entry, SL, TP, filters…"></textarea></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Markets (optional)</label><input id="strat-markets" class="input-field" placeholder="FX majors, Gold"/></div>
-      <div class="form-group"><label class="form-label">Timeframes (optional)</label><input id="strat-tfs" class="input-field" placeholder="M15–H1"/></div>
-    </div>
+    <div class="form-group"><label class="form-label">Summary</label><textarea id="strat-sum" class="input-field" rows="2"></textarea></div>
+    <div class="form-group"><label class="form-label">Playbook details</label><textarea id="strat-det" class="input-field" rows="3"></textarea></div>
   `, `<button onclick="closeModal()" class="btn-secondary">Cancel</button><button onclick="addStrategy()" class="btn-primary">Add</button>`);
 }
-function addStrategy(){
-  const user = getCurrentUser();
+async function addStrategy(){
   const name = document.getElementById('strat-name').value.trim();
   if(!name) return showToast('Name required', 'error');
-  const strategies = Store.getStrategies(user.id);
-  if(strategies.some(s => s.name.toLowerCase() === name.toLowerCase())) return showToast('Strategy already exists', 'error');
-  strategies.push({
-    id: generateId(),
+  const { error } = await supabase.from('strategies').insert({
+    user_id: currentUser.id,
     name,
     summary: document.getElementById('strat-sum').value.trim(),
-    details: document.getElementById('strat-det').value.trim(),
-    markets: document.getElementById('strat-markets')?.value.trim() || '',
-    timeframes: document.getElementById('strat-tfs')?.value.trim() || ''
+    details: document.getElementById('strat-det').value.trim()
   });
-  Store.saveStrategies(user.id, strategies);
+  if(error) return showToast(error.message, 'error');
   closeModal();
+  await loadAllUserData();
   showToast('Strategy added', 'success');
   if(currentPage === 'strategies') renderPage('strategies');
-  else if(currentPage === 'add-trade') refreshStrategyDropdown(name);
+  else if(currentPage === 'add-trade') renderPage('add-trade');
 }
-/** Quick-add from Log Trade — same store, keeps dropdown in sync */
-function showQuickAddStrategy(){
-  const tplOptions = Object.keys(STRATEGY_TEMPLATES).map(n =>
-    `<button type="button" class="btn-secondary text-xs" onclick="quickAddFromTemplate('${n}')">+ ${n}</button>`
-  ).join('');
-  showModal('Add Strategy', `
-    <p class="text-xs text-surface-400 mb-3">Saved strategies appear in Log Trade and are used for analytics grouping.</p>
-    <div class="form-group"><label class="form-label">Name</label><input id="strat-name" class="input-field" placeholder="e.g. London Breakout"/></div>
-    <div class="form-group"><label class="form-label">Summary</label><textarea id="strat-sum" class="input-field" rows="2" placeholder="One-line rule set"></textarea></div>
-    <div class="form-group"><label class="form-label">Playbook details</label><textarea id="strat-det" class="input-field" rows="3" placeholder="Entry, SL, TP, filters…"></textarea></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Markets</label><input id="strat-markets" class="input-field" placeholder="FX, Gold, Oil"/></div>
-      <div class="form-group"><label class="form-label">Timeframes</label><input id="strat-tfs" class="input-field" placeholder="M15–H1"/></div>
-    </div>
-    <div class="pt-2 border-t border-surface-800">
-      <p class="text-[11px] text-surface-500 mb-2">Or start from a template:</p>
-      <div class="flex flex-wrap gap-1.5">${tplOptions}</div>
-    </div>
-  `, `<button onclick="closeModal()" class="btn-secondary">Cancel</button><button onclick="addStrategy()" class="btn-primary">Save & select</button>`);
-}
-function quickAddFromTemplate(name){
-  const user = getCurrentUser();
+function showQuickAddStrategy(){ showAddStrategyModal(); }
+async function addStrategyFromTemplate(name){
   const tpl = STRATEGY_TEMPLATES[name];
   if(!tpl) return;
-  const strategies = Store.getStrategies(user.id);
-  if(strategies.some(s => s.name === name)){
-    closeModal();
-    refreshStrategyDropdown(name);
-    showToast(name + ' already in list — selected', 'info');
-    return;
-  }
-  strategies.push({id: generateId(), name, ...tpl});
-  Store.saveStrategies(user.id, strategies);
-  closeModal();
-  refreshStrategyDropdown(name);
-  showToast(name + ' added & selected', 'success');
-}
-function refreshStrategyDropdown(selectName){
-  const user = getCurrentUser();
-  if(!user) return;
-  const strategies = Store.getStrategies(user.id);
-  const sel = document.getElementById('t-strategy');
-  if(!sel) return;
-  const current = selectName || sel.value;
-  sel.innerHTML = '<option value="">— Select strategy —</option>' +
-    strategies.map(s => `<option value="${escapeHtml(s.name)}" ${s.name === current ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
-  // Rebuild preview map & show summary
-  const strategyMap = {};
-  strategies.forEach(s => { strategyMap[s.name] = s; });
-  const preview = document.getElementById('strategy-preview');
-  if(preview && current && strategyMap[current]){
-    const s = strategyMap[current];
-    preview.classList.remove('hidden');
-    preview.innerHTML = `
-      <p class="font-medium text-surface-300 mb-0.5">${escapeHtml(s.name)}</p>
-      ${s.summary ? `<p class="mb-1">${escapeHtml(s.summary)}</p>` : ''}
-      ${s.details ? `<p class="text-surface-500 line-clamp-2">${escapeHtml(s.details)}</p>` : ''}
-      ${(s.markets || s.timeframes) ? `<p class="mt-1.5 text-[10px] text-surface-500">${s.markets ? 'Markets: ' + escapeHtml(s.markets) : ''}${s.markets && s.timeframes ? ' · ' : ''}${s.timeframes ? 'TF: ' + escapeHtml(s.timeframes) : ''}</p>` : ''}
-    `;
-  } else if(preview){
-    preview.classList.add('hidden');
-    preview.innerHTML = '';
-  }
-  // Re-bind change listener isn't strictly needed if we already have one; trigger preview update
-  sel.dispatchEvent(new Event('change'));
-}
-function addStrategyFromTemplate(name){
-  const user = getCurrentUser();
-  const tpl = STRATEGY_TEMPLATES[name];
-  if(!tpl) return;
-  const strategies = Store.getStrategies(user.id);
-  if(strategies.some(s => s.name === name)) return showToast('Already exists', 'info');
-  strategies.push({id: generateId(), name, ...tpl});
-  Store.saveStrategies(user.id, strategies);
+  const { error } = await supabase.from('strategies').insert({
+    user_id: currentUser.id,
+    name,
+    summary: tpl.summary,
+    details: tpl.details,
+    markets: tpl.markets,
+    timeframes: tpl.timeframes
+  });
+  if(error) return showToast(error.message || 'Already exists', 'info');
+  await loadAllUserData();
   showToast(name + ' added', 'success');
-  if(currentPage === 'strategies') renderPage('strategies');
-  else if(currentPage === 'add-trade') refreshStrategyDropdown(name);
+  renderPage(currentPage);
 }
-function deleteStrategy(id){
-  confirmDialog('Delete Strategy', 'Remove this strategy? Existing trades keep the strategy name tag.', () => {
-    const user = getCurrentUser();
-    Store.saveStrategies(user.id, Store.getStrategies(user.id).filter(s => s.id !== id));
+async function deleteStrategy(id){
+  confirmDialog('Delete Strategy', 'Remove this strategy?', async () => {
+    await supabase.from('strategies').delete().eq('id', id);
+    await loadAllUserData();
     showToast('Deleted', 'success');
     renderPage('strategies');
   }, 'Delete', true);
@@ -1512,41 +1367,64 @@ function renderGoals(data){
     </div>
   </div>`;
 }
-function toggleDiscipline(idx, checked){
-  const user = getCurrentUser();
-  const goals = Store.getGoals(user.id) || {};
+async function toggleDiscipline(idx, checked){
+  const goals = {...userCache.goals};
   if(!goals.disciplineItems) goals.disciplineItems = DEFAULT_DISCIPLINE.map(x => ({...x, checked: false}));
   if(goals.disciplineItems[idx]) goals.disciplineItems[idx].checked = checked;
-  Store.saveGoals(user.id, goals);
+  userCache.goals = goals;
+  await supabase.from('goals').upsert({
+    user_id: currentUser.id,
+    monthly_target: goals.monthlyTarget,
+    max_daily_loss: goals.maxDailyLoss,
+    max_trades_per_day: goals.maxTradesPerDay,
+    max_risk_percent: goals.maxRiskPercent,
+    discipline_items: goals.disciplineItems
+  });
 }
-function saveGoals(){
-  const user = getCurrentUser();
-  const prev = Store.getGoals(user.id) || {};
-  Store.saveGoals(user.id, {
-    ...prev,
+async function saveGoals(){
+  const goals = {
     monthlyTarget: parseFloat(document.getElementById('g-monthly').value) || 0,
     maxDailyLoss: parseFloat(document.getElementById('g-daily').value) || 0,
     maxTradesPerDay: parseInt(document.getElementById('g-trades').value) || 0,
     maxRiskPercent: parseFloat(document.getElementById('g-risk').value) || 1,
-    disciplineItems: prev.disciplineItems || DEFAULT_DISCIPLINE.map(x => ({...x, checked: false}))
+    disciplineItems: userCache.goals.disciplineItems || DEFAULT_DISCIPLINE.map(x => ({...x, checked: false}))
+  };
+  await supabase.from('goals').upsert({
+    user_id: currentUser.id,
+    monthly_target: goals.monthlyTarget,
+    max_daily_loss: goals.maxDailyLoss,
+    max_trades_per_day: goals.maxTradesPerDay,
+    max_risk_percent: goals.maxRiskPercent,
+    discipline_items: goals.disciplineItems
   });
+  userCache.goals = goals;
   showToast('Goals saved', 'success');
   renderPage('goals');
 }
 
-function renderGallery(data){
+async function renderGallery(data){
   const shots = data.screenshots || [];
+  if(shots.length === 0){
+    return `<div class="p-4 sm:p-6 max-w-6xl mx-auto"><div class="page-header"><h1 class="text-xl sm:text-2xl font-bold">Screenshot Gallery</h1></div><div class="card empty-state">Attach screenshots when logging trades</div></div>`;
+  }
+  // Get signed URLs for private bucket
+  const urls = {};
+  for(const s of shots){
+    const { data } = await supabase.storage.from('screenshots').createSignedUrl(s.storagePath, 3600);
+    if(data?.signedUrl) urls[s.id] = data.signedUrl;
+  }
   return `
   <div class="p-4 sm:p-6 max-w-6xl mx-auto">
     <div class="page-header"><h1 class="text-xl sm:text-2xl font-bold">Screenshot Gallery</h1><p class="text-surface-400 text-sm">${shots.length} captures</p></div>
-    ${shots.length === 0 ? '<div class="card empty-state">Attach screenshots when logging trades</div>' : `
     <div class="gallery-grid">${shots.map(s => {
       const trade = (data.trades || []).find(t => t.id === s.tradeId);
-      return `<div class="gallery-item" onclick="openLightbox('${s.data}')"><img src="${s.data}" loading="lazy"/><div class="p-2 text-xs text-surface-400">${trade ? trade.instrument : 'Unlinked'} · ${formatDate(s.createdAt)}</div></div>`;
-    }).join('')}</div>`}
+      const src = urls[s.id] || '';
+      return `<div class="gallery-item" onclick="openLightbox('${src}')"><img src="${src}" loading="lazy"/><div class="p-2 text-xs text-surface-400">${trade ? trade.instrument : 'Unlinked'} · ${formatDate(s.createdAt)}</div></div>`;
+    }).join('')}</div>
   </div>`;
 }
 function openLightbox(src){
+  if(!src) return;
   const c = document.getElementById('modal-container');
   c.innerHTML = `<div class="lightbox" onclick="closeModal()"><img src="${src}"/></div>`;
 }
@@ -1567,55 +1445,28 @@ function renderReports(data){
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
       <div class="card"><h3 class="font-semibold mb-2">Trade History CSV</h3><p class="text-sm text-surface-400 mb-3">Full journal export</p><button onclick="exportTradesCSV()" class="btn-secondary text-sm w-full">Download CSV</button></div>
       <div class="card"><h3 class="font-semibold mb-2">Statistics CSV</h3><p class="text-sm text-surface-400 mb-3">Key metrics summary</p><button onclick="exportStatsCSV()" class="btn-secondary text-sm w-full">Download CSV</button></div>
-      <div class="card"><h3 class="font-semibold mb-2">Full Backup</h3><p class="text-sm text-surface-400 mb-3">JSON portable restore</p><button onclick="exportBackup()" class="btn-primary text-sm w-full">Download Backup</button></div>
-      <div class="card"><h3 class="font-semibold mb-2">Import Backup</h3><p class="text-sm text-surface-400 mb-3">Restore from JSON</p><label class="btn-secondary text-sm w-full text-center cursor-pointer">Choose file<input type="file" accept=".json" class="hidden" onchange="importBackup(event)"/></label></div>
     </div>
   </div>`;
 }
 function exportTradesCSV(){
   const data = getUserData();
   const trades = getFilteredTrades(data);
-  const headers = ['Date', 'Instrument', 'Direction', 'Lots', 'Entry', 'Exit', 'Pips', 'NetPL', 'Strategy', 'Session', 'Status'];
-  const rows = trades.map(t => [t.openTime, t.instrument, t.direction, t.lots, t.entryPrice, t.exitPrice, t.pips, t.netPL, t.strategy, t.session, t.status].join(','));
+  const headers = ['Date','Instrument','Direction','Lots','Entry','Exit','Pips','NetPL','Strategy','Session','Status'];
+  const rows = trades.map(t => [t.openTime,t.instrument,t.direction,t.lots,t.entryPrice,t.exitPrice,t.pips,t.netPL,t.strategy,t.session,t.status].join(','));
   downloadFile('apexledger_trades.csv', headers.join(',') + '\n' + rows.join('\n'), 'text/csv');
   showToast('CSV exported', 'success');
 }
 function exportStatsCSV(){
   const stats = calculateStatistics(getFilteredTrades(getUserData()));
-  const lines = Object.entries(stats).filter(([, v]) => typeof v !== 'object').map(([k, v]) => `${k},${v}`);
+  const lines = Object.entries(stats).filter(([,v]) => typeof v !== 'object').map(([k,v]) => `${k},${v}`);
   downloadFile('apexledger_stats.csv', 'Metric,Value\n' + lines.join('\n'), 'text/csv');
   showToast('Stats exported', 'success');
-}
-function exportBackup(){
-  const user = getCurrentUser();
-  const backup = Store.exportAll(user.id);
-  downloadFile(`apexledger_backup_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(backup, null, 2), 'application/json');
-  showToast('Backup downloaded', 'success');
-}
-function importBackup(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    try {
-      const data = JSON.parse(ev.target.result);
-      confirmDialog('Import Backup', 'This overwrites current data. Continue?', () => {
-        Store.importData(getCurrentUser().id, data);
-        showToast('Imported', 'success');
-        updateAccountSelector();
-        renderPage('dashboard');
-      });
-    } catch { showToast('Invalid file', 'error'); }
-  };
-  reader.readAsText(file);
 }
 function downloadFile(name, content, type){
   const blob = new Blob([content], {type});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
+  a.href = url; a.download = name; a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -1624,7 +1475,7 @@ function renderNotes(data){
   return `
   <div class="p-4 sm:p-6 max-w-3xl mx-auto">
     <div class="page-header flex items-center justify-between"><h1 class="text-xl sm:text-2xl font-bold">Notes</h1><button onclick="showAddNoteModal()" class="btn-primary text-sm">Add Note</button></div>
-    ${notes.length === 0 ? '<div class="card empty-state">No notes yet</div>' : notes.slice().reverse().map(n => `
+    ${notes.length === 0 ? '<div class="card empty-state">No notes yet</div>' : notes.map(n => `
       <div class="card mb-3"><div class="flex justify-between items-start"><div><p class="font-medium">${escapeHtml(n.title || 'Note')}</p><p class="text-sm text-surface-400 mt-1 whitespace-pre-wrap">${escapeHtml(n.body || '')}</p><p class="text-[11px] text-surface-500 mt-2">${formatDate(n.createdAt, true)}</p></div><button onclick="deleteNote('${n.id}')" class="btn-ghost text-xs text-red-400">×</button></div></div>`).join('')}
   </div>`;
 }
@@ -1634,19 +1485,23 @@ function showAddNoteModal(){
     <div class="form-group"><label class="form-label">Body</label><textarea id="note-body" class="input-field" rows="5"></textarea></div>
   `, `<button onclick="closeModal()" class="btn-secondary">Cancel</button><button onclick="addNote()" class="btn-primary">Save</button>`);
 }
-function addNote(){
-  const user = getCurrentUser();
+async function addNote(){
   const title = document.getElementById('note-title').value.trim();
-  const notes = Store.getNotes(user.id);
-  notes.push({id: generateId(), title, body: document.getElementById('note-body').value.trim(), createdAt: new Date().toISOString()});
-  Store.saveNotes(user.id, notes);
+  const body = document.getElementById('note-body').value.trim();
+  const { error } = await supabase.from('notes').insert({
+    user_id: currentUser.id,
+    title,
+    body
+  });
+  if(error) return showToast(error.message, 'error');
   closeModal();
+  await loadAllUserData();
   showToast('Note saved', 'success');
   renderPage('notes');
 }
-function deleteNote(id){
-  const user = getCurrentUser();
-  Store.saveNotes(user.id, Store.getNotes(user.id).filter(n => n.id !== id));
+async function deleteNote(id){
+  await supabase.from('notes').delete().eq('id', id);
+  await loadAllUserData();
   renderPage('notes');
 }
 
@@ -1671,28 +1526,32 @@ function renderSettings(data){
     <div class="card"><h3 class="text-sm font-semibold mb-3 text-red-400">Danger Zone</h3><button onclick="logout()" class="btn-danger text-sm">Sign Out</button></div>
   </div>`;
 }
-function saveProfile(){
+async function saveProfile(){
   const name = document.getElementById('set-name').value.trim();
   if(!name) return;
-  const users = getUsers();
-  const u = users.find(x => x.id === currentUser.id);
-  if(u){
-    u.name = name;
-    saveUsers(users);
-    currentUser.name = name;
-    localStorage.setItem('apexledger_session', JSON.stringify(currentUser));
-    document.getElementById('user-display-name').textContent = name;
-    document.getElementById('user-avatar').textContent = name.charAt(0).toUpperCase();
-    showToast('Profile updated', 'success');
-  }
+  await supabase.auth.updateUser({ data: { full_name: name } });
+  currentUser.name = name;
+  document.getElementById('user-display-name').textContent = name;
+  document.getElementById('user-avatar').textContent = name.charAt(0).toUpperCase();
+  showToast('Profile updated', 'success');
 }
-function saveTradingSettings(){
-  const user = getCurrentUser();
-  const s = Store.getSettings(user.id);
-  s.defaultRiskPercent = parseFloat(document.getElementById('set-risk').value) || 1;
-  s.maxRiskPercent = parseFloat(document.getElementById('set-maxrisk').value) || 2;
-  s.preferredLots = parseFloat(document.getElementById('set-lots').value) || 0.1;
-  Store.saveSettings(user.id, s);
+async function saveTradingSettings(){
+  const s = {
+    theme: userCache.settings.theme || 'dark',
+    default_risk_percent: parseFloat(document.getElementById('set-risk').value) || 1,
+    max_risk_percent: parseFloat(document.getElementById('set-maxrisk').value) || 2,
+    preferred_lots: parseFloat(document.getElementById('set-lots').value) || 0.1
+  };
+  await supabase.from('settings').upsert({
+    user_id: currentUser.id,
+    ...s
+  });
+  userCache.settings = {
+    theme: s.theme,
+    defaultRiskPercent: s.default_risk_percent,
+    maxRiskPercent: s.max_risk_percent,
+    preferredLots: s.preferred_lots
+  };
   showToast('Preferences saved', 'success');
 }
 
@@ -1700,11 +1559,15 @@ function saveTradingSettings(){
 function setTheme(theme){
   if(theme === 'light') document.documentElement.classList.remove('dark');
   else document.documentElement.classList.add('dark');
-  const user = getCurrentUser();
-  if(user){
-    const s = Store.getSettings(user.id);
-    s.theme = theme;
-    Store.saveSettings(user.id, s);
+  if(currentUser){
+    supabase.from('settings').upsert({
+      user_id: currentUser.id,
+      theme,
+      default_risk_percent: userCache.settings.defaultRiskPercent,
+      max_risk_percent: userCache.settings.maxRiskPercent,
+      preferred_lots: userCache.settings.preferredLots
+    });
+    userCache.settings.theme = theme;
   }
 }
 function toggleTheme(){
@@ -1716,9 +1579,7 @@ function showAuthView(v){
   document.getElementById('register-view').classList.toggle('hidden', v !== 'register');
 }
 function updateAccountSelector(){
-  const user = getCurrentUser();
-  if(!user) return;
-  const accounts = Store.getAccounts(user.id).filter(a => a.status === 'active');
+  const accounts = userCache.accounts.filter(a => a.status === 'active');
   const sel = document.getElementById('account-selector');
   if(!sel) return;
   if(selectedAccountId !== 'all' && !accounts.some(a => a.id === selectedAccountId)){
@@ -1728,61 +1589,85 @@ function updateAccountSelector(){
   sel.innerHTML = '<option value="all">All Accounts</option>' + accounts.map(a => `<option value="${a.id}" ${selectedAccountId === a.id ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join('');
 }
 
-/* ===================== NEWS (mock) ===================== */
 function startNewsTicker(){
-  const items = ['USD CPI m/m 0.3% · High impact', 'EUR ECB Rate Decision · 14:30 GMT', 'GBP GDP q/q 0.1%', 'XAUUSD volatility elevated into US open', 'NAS100 futures +0.4% pre-market', 'USDJPY approaches 152.00 resistance', 'FOMC minutes later today · Watch USD', 'AUD employment change due overnight', 'USOIL inventories release · Watch energy'];
+  const items = ['USD CPI m/m 0.3% · High impact','EUR ECB Rate Decision · 14:30 GMT','GBP GDP q/q 0.1%','XAUUSD volatility elevated into US open','NAS100 futures +0.4% pre-market','USDJPY approaches 152.00 resistance','FOMC minutes later today · Watch USD','AUD employment change due overnight','USOIL inventories release · Watch energy'];
   const el = document.getElementById('news-content');
   if(el) el.innerHTML = items.concat(items).map(t => `<span class="px-4">${t}</span><span class="text-surface-600">·</span>`).join('');
 }
 
 /* ===================== BOOT ===================== */
-function initApp(){
-  const user = getCurrentUser();
-  if(!user) return;
+async function initApp(){
+  if(!currentUser) return;
   document.getElementById('auth-container').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  document.getElementById('user-display-name').textContent = user.name;
-  document.getElementById('user-display-email').textContent = user.email;
-  document.getElementById('user-avatar').textContent = user.name.charAt(0).toUpperCase();
-  const settings = Store.getSettings(user.id);
-  setTheme(settings.theme || 'dark');
+  document.getElementById('user-display-name').textContent = currentUser.name;
+  document.getElementById('user-display-email').textContent = currentUser.email;
+  document.getElementById('user-avatar').textContent = currentUser.name.charAt(0).toUpperCase();
+  await loadAllUserData();
+  setTheme(userCache.settings.theme || 'dark');
   selectedAccountId = localStorage.getItem('apexledger_selected_account') || 'all';
   updateAccountSelector();
   startNewsTicker();
   navigate('dashboard');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Safety check for missing keys
+  if(SUPABASE_URL.includes('YOUR-PROJECT') || SUPABASE_ANON_KEY.includes('YOUR-ANON')){
+    document.getElementById('loading-screen').innerHTML = `
+      <div class="text-center max-w-md px-6">
+        <h1 class="text-2xl font-bold mb-4 text-red-400">Configuration Needed</h1>
+        <p class="text-surface-300 text-sm mb-4">Open this file in a code editor and replace the two values at the top of the script:</p>
+        <p class="text-xs mono text-left bg-surface-900 p-3 rounded mb-2">SUPABASE_URL<br>SUPABASE_ANON_KEY</p>
+        <p class="text-surface-400 text-xs">Then save and refresh this page.</p>
+      </div>`;
+    return;
+  }
+
+  setTimeout(async () => {
     document.getElementById('loading-screen').style.opacity = '0';
     document.getElementById('loading-screen').style.transition = 'opacity .35s';
-    setTimeout(() => {
+    setTimeout(async () => {
       document.getElementById('loading-screen').classList.add('hidden');
-      const session = localStorage.getItem('apexledger_session');
-      if(session){
-        try { currentUser = JSON.parse(session); initApp(); }
-        catch { document.getElementById('auth-container').classList.remove('hidden'); }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if(session?.user){
+        currentUser = {
+          id: session.user.id,
+          name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
+          email: session.user.email
+        };
+        await initApp();
       } else {
         document.getElementById('auth-container').classList.remove('hidden');
       }
     }, 350);
-  }, 500);
+  }, 400);
 
-  document.getElementById('login-form')?.addEventListener('submit', e => {
+  document.getElementById('login-form')?.addEventListener('submit', async e => {
     e.preventDefault();
-    const r = login(document.getElementById('login-email').value, document.getElementById('login-password').value);
-    if(r.success){ showToast('Welcome back', 'success'); initApp(); }
+    const r = await login(document.getElementById('login-email').value, document.getElementById('login-password').value);
+    if(r.success){ showToast('Welcome back', 'success'); await initApp(); }
     else showToast(r.error, 'error');
   });
-  document.getElementById('register-form')?.addEventListener('submit', e => {
+
+  document.getElementById('register-form')?.addEventListener('submit', async e => {
     e.preventDefault();
-    const r = register(document.getElementById('reg-name').value, document.getElementById('reg-email').value, document.getElementById('reg-password').value, document.getElementById('reg-confirm').value);
+    const r = await register(
+      document.getElementById('reg-name').value,
+      document.getElementById('reg-email').value,
+      document.getElementById('reg-password').value,
+      document.getElementById('reg-confirm').value
+    );
     if(r.success){
-      showToast('Account created', 'success');
-      login(document.getElementById('reg-email').value, document.getElementById('reg-password').value);
-      initApp();
+      showToast('Account created! Check your email if confirmation is required.', 'success');
+      // Try auto-login (works when email confirmation is disabled)
+      const loginRes = await login(document.getElementById('reg-email').value, document.getElementById('reg-password').value);
+      if(loginRes.success) await initApp();
+      else showAuthView('login');
     } else showToast(r.error, 'error');
   });
+
   document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
   document.getElementById('user-menu-btn')?.addEventListener('click', e => {
     e.stopPropagation();

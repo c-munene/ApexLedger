@@ -220,7 +220,6 @@ html:not(.dark) table.data-table td{color:#3f3f46}
 <script>
 /* ===================== SUPABASE CONFIG ===================== */
 /* ★★★ REPLACE THESE TWO VALUES WITH YOUR OWN ★★★ */
-/* ===================== SUPABASE CONFIG ===================== */
 const SUPABASE_URL = 'https://yryquaecrubhzjlzbigk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlyeXF1YWVjcnViaHpqbHpiaWdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM3MTgwMjQsImV4cCI6MjEwOTI5NDAyNH0.-m-rR75DfaYLOAjkfE62Hyywq5wkB5mtGKJFeR5qGqI';
 
@@ -407,13 +406,13 @@ async function loadAllUserData(){
   const uid = currentUser.id;
 
   const [accRes, tradeRes, stratRes, goalsRes, notesRes, shotsRes, settingsRes] = await Promise.all([
-    supabase.from('trading_accounts').select('*').order('created_at',{ascending:true}),
-    supabase.from('trades').select('*').order('open_time',{ascending:false}),
-    supabase.from('strategies').select('*').order('created_at',{ascending:true}),
-    supabase.from('goals').select('*').eq('user_id',uid).maybeSingle(),
-    supabase.from('notes').select('*').order('created_at',{ascending:false}),
-    supabase.from('screenshots').select('*').order('created_at',{ascending:false}),
-    supabase.from('settings').select('*').eq('user_id',uid).maybeSingle()
+    sb.from('trading_accounts').select('*').order('created_at',{ascending:true}),
+    sb.from('trades').select('*').order('open_time',{ascending:false}),
+    sb.from('strategies').select('*').order('created_at',{ascending:true}),
+    sb.from('goals').select('*').eq('user_id',uid).maybeSingle(),
+    sb.from('notes').select('*').order('created_at',{ascending:false}),
+    sb.from('screenshots').select('*').order('created_at',{ascending:false}),
+    sb.from('settings').select('*').eq('user_id',uid).maybeSingle()
   ]);
 
   if(accRes.error) console.error('accounts', accRes.error);
@@ -491,7 +490,7 @@ async function register(name, email, password, confirm){
   if(password !== confirm) return {success:false, error:'Passwords do not match'};
   if(password.length < 6) return {success:false, error:'Password too short'};
 
-  const { data, error } = await supabase.auth.signUp({
+  const { data, error } = await sb.auth.signUp({
     email,
     password,
     options: { data: { full_name: name } }
@@ -502,7 +501,7 @@ async function register(name, email, password, confirm){
 
   // Create default rows for the new user
   await Promise.all([
-    supabase.from('trading_accounts').insert({
+    sb.from('trading_accounts').insert({
       user_id: data.user.id,
       name: 'Main Account',
       broker: 'Demo',
@@ -510,14 +509,14 @@ async function register(name, email, password, confirm){
       balance: 10000,
       status: 'active'
     }),
-    supabase.from('settings').insert({
+    sb.from('settings').insert({
       user_id: data.user.id,
       theme: 'dark',
       default_risk_percent: 1,
       max_risk_percent: 2,
       preferred_lots: 0.1
     }),
-    supabase.from('goals').insert({
+    sb.from('goals').insert({
       user_id: data.user.id,
       monthly_target: 1000,
       max_daily_loss: 200,
@@ -531,7 +530,7 @@ async function register(name, email, password, confirm){
 }
 
 async function login(email, password){
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if(error) return {success:false, error: error.message};
   currentUser = {
     id: data.user.id,
@@ -542,7 +541,7 @@ async function login(email, password){
 }
 
 async function logout(){
-  await supabase.auth.signOut();
+  await sb.auth.signOut();
   currentUser = null;
   userCache = { accounts:[], trades:[], strategies:[], goals:{}, notes:[], screenshots:[], settings:{theme:'dark',defaultRiskPercent:1,maxRiskPercent:2,preferredLots:0.1} };
   document.getElementById('app').classList.add('hidden');
@@ -685,7 +684,7 @@ function showAddAccountModal(){
 async function addAccount(){
   const name = document.getElementById('acc-name').value.trim();
   if(!name) return showToast('Name required','error');
-  const { error } = await supabase.from('trading_accounts').insert({
+  const { error } = await sb.from('trading_accounts').insert({
     user_id: currentUser.id,
     name,
     broker: document.getElementById('acc-broker').value.trim(),
@@ -703,7 +702,7 @@ async function addAccount(){
 
 async function deleteAccount(id){
   confirmDialog('Delete Account','Trades stay but lose account link. Continue?', async ()=>{
-    const { error } = await supabase.from('trading_accounts').delete().eq('id',id);
+    const { error } = await sb.from('trading_accounts').delete().eq('id',id);
     if(error) return showToast(error.message,'error');
     if(selectedAccountId===id){ selectedAccountId='all'; localStorage.setItem('apexledger_selected_account','all'); }
     await loadAllUserData();
@@ -783,7 +782,7 @@ function viewTrade(id){
 
 async function deleteTrade(id){
   confirmDialog('Delete Trade','Remove this trade permanently?', async ()=>{
-    const { error } = await supabase.from('trades').delete().eq('id',id);
+    const { error } = await sb.from('trades').delete().eq('id',id);
     if(error) return showToast(error.message,'error');
     await loadAllUserData();
     showToast('Trade deleted','success');
@@ -972,7 +971,7 @@ function wireAddTradeForm(data){
     }
     const rMultRaw=document.getElementById('t-rmult').value;
 
-    const { data: inserted, error } = await supabase.from('trades').insert({
+    const { data: inserted, error } = await sb.from('trades').insert({
       user_id: currentUser.id,
       account_id: document.getElementById('t-account').value || null,
       instrument: inst,
@@ -1003,9 +1002,9 @@ function wireAddTradeForm(data){
     const file = document.getElementById('t-shot').files[0];
     if(file && file.size < 1.5*1024*1024){
       const path = `${currentUser.id}/${inserted.id}_${Date.now()}.jpg`;
-      const { error: upErr } = await supabase.storage.from('screenshots').upload(path, file, { contentType: file.type });
+      const { error: upErr } = await sb.storage.from('screenshots').upload(path, file, { contentType: file.type });
       if(!upErr){
-        await supabase.from('screenshots').insert({
+        await sb.from('screenshots').insert({
           user_id: currentUser.id,
           trade_id: inserted.id,
           storage_path: path,
@@ -1287,7 +1286,7 @@ function showAddStrategyModal(){
 async function addStrategy(){
   const name = document.getElementById('strat-name').value.trim();
   if(!name) return showToast('Name required', 'error');
-  const { error } = await supabase.from('strategies').insert({
+  const { error } = await sb.from('strategies').insert({
     user_id: currentUser.id,
     name,
     summary: document.getElementById('strat-sum').value.trim(),
@@ -1304,7 +1303,7 @@ function showQuickAddStrategy(){ showAddStrategyModal(); }
 async function addStrategyFromTemplate(name){
   const tpl = STRATEGY_TEMPLATES[name];
   if(!tpl) return;
-  const { error } = await supabase.from('strategies').insert({
+  const { error } = await sb.from('strategies').insert({
     user_id: currentUser.id,
     name,
     summary: tpl.summary,
@@ -1319,7 +1318,7 @@ async function addStrategyFromTemplate(name){
 }
 async function deleteStrategy(id){
   confirmDialog('Delete Strategy', 'Remove this strategy?', async () => {
-    await supabase.from('strategies').delete().eq('id', id);
+    await sb.from('strategies').delete().eq('id', id);
     await loadAllUserData();
     showToast('Deleted', 'success');
     renderPage('strategies');
@@ -1373,7 +1372,7 @@ async function toggleDiscipline(idx, checked){
   if(!goals.disciplineItems) goals.disciplineItems = DEFAULT_DISCIPLINE.map(x => ({...x, checked: false}));
   if(goals.disciplineItems[idx]) goals.disciplineItems[idx].checked = checked;
   userCache.goals = goals;
-  await supabase.from('goals').upsert({
+  await sb.from('goals').upsert({
     user_id: currentUser.id,
     monthly_target: goals.monthlyTarget,
     max_daily_loss: goals.maxDailyLoss,
@@ -1390,7 +1389,7 @@ async function saveGoals(){
     maxRiskPercent: parseFloat(document.getElementById('g-risk').value) || 1,
     disciplineItems: userCache.goals.disciplineItems || DEFAULT_DISCIPLINE.map(x => ({...x, checked: false}))
   };
-  await supabase.from('goals').upsert({
+  await sb.from('goals').upsert({
     user_id: currentUser.id,
     monthly_target: goals.monthlyTarget,
     max_daily_loss: goals.maxDailyLoss,
@@ -1411,7 +1410,7 @@ async function renderGallery(data){
   // Get signed URLs for private bucket
   const urls = {};
   for(const s of shots){
-    const { data } = await supabase.storage.from('screenshots').createSignedUrl(s.storagePath, 3600);
+    const { data } = await sb.storage.from('screenshots').createSignedUrl(s.storagePath, 3600);
     if(data?.signedUrl) urls[s.id] = data.signedUrl;
   }
   return `
@@ -1489,7 +1488,7 @@ function showAddNoteModal(){
 async function addNote(){
   const title = document.getElementById('note-title').value.trim();
   const body = document.getElementById('note-body').value.trim();
-  const { error } = await supabase.from('notes').insert({
+  const { error } = await sb.from('notes').insert({
     user_id: currentUser.id,
     title,
     body
@@ -1501,7 +1500,7 @@ async function addNote(){
   renderPage('notes');
 }
 async function deleteNote(id){
-  await supabase.from('notes').delete().eq('id', id);
+  await sb.from('notes').delete().eq('id', id);
   await loadAllUserData();
   renderPage('notes');
 }
@@ -1530,7 +1529,7 @@ function renderSettings(data){
 async function saveProfile(){
   const name = document.getElementById('set-name').value.trim();
   if(!name) return;
-  await supabase.auth.updateUser({ data: { full_name: name } });
+  await sb.auth.updateUser({ data: { full_name: name } });
   currentUser.name = name;
   document.getElementById('user-display-name').textContent = name;
   document.getElementById('user-avatar').textContent = name.charAt(0).toUpperCase();
@@ -1543,7 +1542,7 @@ async function saveTradingSettings(){
     max_risk_percent: parseFloat(document.getElementById('set-maxrisk').value) || 2,
     preferred_lots: parseFloat(document.getElementById('set-lots').value) || 0.1
   };
-  await supabase.from('settings').upsert({
+  await sb.from('settings').upsert({
     user_id: currentUser.id,
     ...s
   });
@@ -1561,7 +1560,7 @@ function setTheme(theme){
   if(theme === 'light') document.documentElement.classList.remove('dark');
   else document.documentElement.classList.add('dark');
   if(currentUser){
-    supabase.from('settings').upsert({
+    sb.from('settings').upsert({
       user_id: currentUser.id,
       theme,
       default_risk_percent: userCache.settings.defaultRiskPercent,
@@ -1631,7 +1630,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(async () => {
       document.getElementById('loading-screen').classList.add('hidden');
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await sb.auth.getSession();
       if(session?.user){
         currentUser = {
           id: session.user.id,

@@ -599,13 +599,25 @@ function renderDashboard(data){
   const recent = [...closed].sort((a,b)=>new Date(b.closeTime||b.openTime)-new Date(a.closeTime||a.openTime)).slice(0,6);
   const thisMonth = new Date().toISOString().slice(0,7);
   const monthPL = closed.filter(t=>(t.closeTime||'').startsWith(thisMonth)).reduce((s,t)=>s+(t.netPL||0),0);
+
+  // Current Equity = starting balance(s) + net P&L of filtered trades
+  let startingBalance = 0;
+  if(selectedAccountId === 'all'){
+    startingBalance = (data.accounts || []).reduce((s,a) => s + (Number(a.balance) || 0), 0);
+  } else {
+    const acc = (data.accounts || []).find(a => a.id === selectedAccountId);
+    startingBalance = acc ? (Number(acc.balance) || 0) : 0;
+  }
+  const currentEquity = startingBalance + (stats.netPL || 0);
+
   return `
   <div class="p-4 sm:p-6 max-w-7xl mx-auto">
     <div class="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div><h1 class="text-xl sm:text-2xl font-bold">Dashboard</h1><p class="text-surface-400 text-sm mt-0.5">Performance overview</p></div>
       <button onclick="navigate('add-trade')" class="btn-primary text-sm">+ Log Trade</button>
     </div>
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+      <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Current Equity</p><p class="text-xl font-bold mono ${plClass(currentEquity - startingBalance)}">${formatCurrency(currentEquity,currency).replace('+','')}</p><p class="text-[11px] text-surface-500 mt-1">Start ${formatCurrency(startingBalance,currency).replace('+','')}</p></div>
       <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Net P&amp;L</p><p class="text-xl font-bold mono ${plClass(stats.netPL)}">${formatCurrency(stats.netPL,currency)}</p><p class="text-[11px] text-surface-500 mt-1">${stats.totalTrades} closed trades</p></div>
       <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Win Rate</p><p class="text-xl font-bold mono">${stats.winRate.toFixed(1)}%</p><p class="text-[11px] text-surface-500 mt-1">${stats.wins}W / ${stats.losses}L</p></div>
       <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Profit Factor</p><p class="text-xl font-bold mono">${stats.profitFactor===Infinity?'∞':(stats.profitFactor||0).toFixed(2)}</p><p class="text-[11px] text-surface-500 mt-1">Expectancy ${formatCurrency(stats.expectancy,currency)}</p></div>

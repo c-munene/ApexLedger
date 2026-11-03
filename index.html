@@ -823,17 +823,29 @@ function renderAddTrade(data){
       </div>
       <div class="card">
         <h3 class="text-sm font-semibold mb-3">Context</h3>
+        <div class="form-group">
+          <div class="flex items-center justify-between mb-1">
+            <label class="form-label mb-0">Strategy</label>
+            <button type="button" onclick="showQuickAddStrategy()" class="text-[11px] text-brand-400 hover:text-brand-300 font-medium">+ New strategy</button>
+          </div>
+          <select id="t-strategy" class="input-field">
+            <option value="">— Select strategy —</option>
+            ${strategies.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join('')}
+          </select>
+          <div id="strategy-preview" class="hidden mt-2 p-2.5 rounded-lg bg-surface-800/50 border border-surface-800 text-xs text-surface-400"></div>
+          ${strategies.length === 0 ? `<p class="text-[11px] text-surface-500 mt-1.5">No strategies yet. <button type="button" onclick="showQuickAddStrategy()" class="text-brand-400 underline">Create one</button> or add from templates in Strategies.</p>` : ''}
+        </div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label">Strategy</label><select id="t-strategy" class="input-field"><option value="">—</option>${strategies.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join('')}</select></div>
           <div class="form-group"><label class="form-label">Session</label><select id="t-session" class="input-field"><option>London</option><option>New York</option><option>Asia</option><option>Overlap</option><option>Sydney</option></select></div>
-        </div>
-        <div class="form-row">
           <div class="form-group"><label class="form-label">Emotional State</label><select id="t-emotion" class="input-field"><option>Calm</option><option>Focused</option><option>Confident</option><option>FOMO</option><option>Revenge</option><option>Anxious</option><option>Bored</option></select></div>
-          <div class="form-group"><label class="form-label">Setup Quality</label><select id="t-quality" class="input-field"><option value="">—</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>Impulse</option></select></div>
         </div>
         <div class="form-row">
+          <div class="form-group"><label class="form-label">Setup Quality</label><select id="t-quality" class="input-field"><option value="">—</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>Impulse</option></select></div>
           <div class="form-group"><label class="form-label">R-Multiple (planned or realized)</label><input id="t-rmult" type="number" step="0.1" class="input-field" placeholder="e.g. 2.0"/></div>
-          <div class="form-group"><label class="form-label">Status</label><select id="t-status" class="input-field"><option value="closed">Closed</option><option value="open">Open</option></select></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select id="t-status" class="input-field max-w-xs"><option value="closed">Closed</option><option value="open">Open</option></select>
         </div>
         <div class="form-group mb-2">
           <label class="form-label">Quick tags</label>
@@ -870,6 +882,34 @@ function wireAddTradeForm(data){
       else { selectedTags.add(tag); chip.classList.add('active'); }
     });
   });
+
+  // Strategy dropdown ↔ Strategies section sync + preview
+  const strategySelect = document.getElementById('t-strategy');
+  const strategyPreview = document.getElementById('strategy-preview');
+  const strategyMap = {};
+  (data.strategies || []).forEach(s => { strategyMap[s.name] = s; });
+
+  function updateStrategyPreview(){
+    const name = strategySelect?.value;
+    if(!name || !strategyMap[name]){
+      if(strategyPreview){ strategyPreview.classList.add('hidden'); strategyPreview.innerHTML = ''; }
+      return;
+    }
+    const s = strategyMap[name];
+    const summary = s.summary || s.description || '';
+    const details = s.details || '';
+    const markets = s.markets || '';
+    const tfs = s.timeframes || '';
+    strategyPreview.classList.remove('hidden');
+    strategyPreview.innerHTML = `
+      <p class="font-medium text-surface-300 mb-0.5">${escapeHtml(s.name)}</p>
+      ${summary ? `<p class="mb-1">${escapeHtml(summary)}</p>` : ''}
+      ${details ? `<p class="text-surface-500 line-clamp-2">${escapeHtml(details)}</p>` : ''}
+      ${(markets || tfs) ? `<p class="mt-1.5 text-[10px] text-surface-500">${markets ? 'Markets: ' + escapeHtml(markets) : ''}${markets && tfs ? ' · ' : ''}${tfs ? 'TF: ' + escapeHtml(tfs) : ''}</p>` : ''}
+    `;
+  }
+  strategySelect?.addEventListener('change', updateStrategyPreview);
+  updateStrategyPreview();
 
   const updateLive = () => {
     const inst = document.getElementById('t-instrument').value;
@@ -1306,7 +1346,7 @@ function renderStrategies(data){
     `<div class="space-y-3">${list.map(s => {
       const st = trades.filter(t => t.strategy === s.name);
       const stats = calculateStatistics(st);
-      return `<div class="card"><div class="flex justify-between items-start mb-3"><div><h3 class="font-semibold">${escapeHtml(s.name)}</h3><p class="text-sm text-surface-400 mt-1">${escapeHtml(s.summary || s.description || '')}</p></div><button onclick="deleteStrategy('${s.id}')" class="btn-ghost text-xs text-red-400">Delete</button></div>
+      return `<div class="card"><div class="flex justify-between items-start mb-3"><div><h3 class="font-semibold">${escapeHtml(s.name)}</h3><p class="text-sm text-surface-400 mt-1">${escapeHtml(s.summary || s.description || '')}</p>${(s.markets || s.timeframes) ? `<p class="text-[11px] text-surface-500 mt-1">${s.markets ? escapeHtml(s.markets) : ''}${s.markets && s.timeframes ? ' · ' : ''}${s.timeframes ? escapeHtml(s.timeframes) : ''}</p>` : ''}</div><button onclick="deleteStrategy('${s.id}')" class="btn-ghost text-xs text-red-400">Delete</button></div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">${[['Net P&L', formatCurrency(stats.netPL, currency), plClass(stats.netPL)], ['Win rate', st.length ? stats.winRate.toFixed(0) + '%' : '—', ''], ['PF', stats.profitFactor === Infinity ? '∞' : (stats.profitFactor || 0).toFixed(2), ''], ['Trades', st.length, '']].map(([l, v, c]) => `<div class="p-2 rounded-lg bg-surface-800/40"><p class="text-[10px] text-surface-500">${l}</p><p class="text-sm font-semibold mono ${c}">${v}</p></div>`).join('')}</div></div>`;
     }).join('')}</div>
     <div class="mt-4 flex flex-wrap gap-2"><span class="text-xs text-surface-500">Templates:</span>${Object.keys(STRATEGY_TEMPLATES).map(n => `<button class="btn-secondary text-xs" onclick="addStrategyFromTemplate('${n}')">+ ${n}</button>`).join('')}</div>`}
@@ -1314,9 +1354,13 @@ function renderStrategies(data){
 }
 function showAddStrategyModal(){
   showModal('Add Strategy', `
-    <div class="form-group"><label class="form-label">Name</label><input id="strat-name" class="input-field"/></div>
-    <div class="form-group"><label class="form-label">Summary</label><textarea id="strat-sum" class="input-field" rows="2"></textarea></div>
-    <div class="form-group"><label class="form-label">Playbook details</label><textarea id="strat-det" class="input-field" rows="4"></textarea></div>
+    <div class="form-group"><label class="form-label">Name</label><input id="strat-name" class="input-field" placeholder="e.g. London Breakout"/></div>
+    <div class="form-group"><label class="form-label">Summary</label><textarea id="strat-sum" class="input-field" rows="2" placeholder="One-line rule set"></textarea></div>
+    <div class="form-group"><label class="form-label">Playbook details</label><textarea id="strat-det" class="input-field" rows="4" placeholder="Entry, SL, TP, filters…"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Markets (optional)</label><input id="strat-markets" class="input-field" placeholder="FX majors, Gold"/></div>
+      <div class="form-group"><label class="form-label">Timeframes (optional)</label><input id="strat-tfs" class="input-field" placeholder="M15–H1"/></div>
+    </div>
   `, `<button onclick="closeModal()" class="btn-secondary">Cancel</button><button onclick="addStrategy()" class="btn-primary">Add</button>`);
 }
 function addStrategy(){
@@ -1324,9 +1368,86 @@ function addStrategy(){
   const name = document.getElementById('strat-name').value.trim();
   if(!name) return showToast('Name required', 'error');
   const strategies = Store.getStrategies(user.id);
-  strategies.push({id: generateId(), name, summary: document.getElementById('strat-sum').value.trim(), details: document.getElementById('strat-det').value.trim()});
+  if(strategies.some(s => s.name.toLowerCase() === name.toLowerCase())) return showToast('Strategy already exists', 'error');
+  strategies.push({
+    id: generateId(),
+    name,
+    summary: document.getElementById('strat-sum').value.trim(),
+    details: document.getElementById('strat-det').value.trim(),
+    markets: document.getElementById('strat-markets')?.value.trim() || '',
+    timeframes: document.getElementById('strat-tfs')?.value.trim() || ''
+  });
   Store.saveStrategies(user.id, strategies);
-  closeModal(); showToast('Strategy added', 'success'); renderPage('strategies');
+  closeModal();
+  showToast('Strategy added', 'success');
+  if(currentPage === 'strategies') renderPage('strategies');
+  else if(currentPage === 'add-trade') refreshStrategyDropdown(name);
+}
+/** Quick-add from Log Trade — same store, keeps dropdown in sync */
+function showQuickAddStrategy(){
+  const tplOptions = Object.keys(STRATEGY_TEMPLATES).map(n =>
+    `<button type="button" class="btn-secondary text-xs" onclick="quickAddFromTemplate('${n}')">+ ${n}</button>`
+  ).join('');
+  showModal('Add Strategy', `
+    <p class="text-xs text-surface-400 mb-3">Saved strategies appear in Log Trade and are used for analytics grouping.</p>
+    <div class="form-group"><label class="form-label">Name</label><input id="strat-name" class="input-field" placeholder="e.g. London Breakout"/></div>
+    <div class="form-group"><label class="form-label">Summary</label><textarea id="strat-sum" class="input-field" rows="2" placeholder="One-line rule set"></textarea></div>
+    <div class="form-group"><label class="form-label">Playbook details</label><textarea id="strat-det" class="input-field" rows="3" placeholder="Entry, SL, TP, filters…"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Markets</label><input id="strat-markets" class="input-field" placeholder="FX, Gold, Oil"/></div>
+      <div class="form-group"><label class="form-label">Timeframes</label><input id="strat-tfs" class="input-field" placeholder="M15–H1"/></div>
+    </div>
+    <div class="pt-2 border-t border-surface-800">
+      <p class="text-[11px] text-surface-500 mb-2">Or start from a template:</p>
+      <div class="flex flex-wrap gap-1.5">${tplOptions}</div>
+    </div>
+  `, `<button onclick="closeModal()" class="btn-secondary">Cancel</button><button onclick="addStrategy()" class="btn-primary">Save & select</button>`);
+}
+function quickAddFromTemplate(name){
+  const user = getCurrentUser();
+  const tpl = STRATEGY_TEMPLATES[name];
+  if(!tpl) return;
+  const strategies = Store.getStrategies(user.id);
+  if(strategies.some(s => s.name === name)){
+    closeModal();
+    refreshStrategyDropdown(name);
+    showToast(name + ' already in list — selected', 'info');
+    return;
+  }
+  strategies.push({id: generateId(), name, ...tpl});
+  Store.saveStrategies(user.id, strategies);
+  closeModal();
+  refreshStrategyDropdown(name);
+  showToast(name + ' added & selected', 'success');
+}
+function refreshStrategyDropdown(selectName){
+  const user = getCurrentUser();
+  if(!user) return;
+  const strategies = Store.getStrategies(user.id);
+  const sel = document.getElementById('t-strategy');
+  if(!sel) return;
+  const current = selectName || sel.value;
+  sel.innerHTML = '<option value="">— Select strategy —</option>' +
+    strategies.map(s => `<option value="${escapeHtml(s.name)}" ${s.name === current ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+  // Rebuild preview map & show summary
+  const strategyMap = {};
+  strategies.forEach(s => { strategyMap[s.name] = s; });
+  const preview = document.getElementById('strategy-preview');
+  if(preview && current && strategyMap[current]){
+    const s = strategyMap[current];
+    preview.classList.remove('hidden');
+    preview.innerHTML = `
+      <p class="font-medium text-surface-300 mb-0.5">${escapeHtml(s.name)}</p>
+      ${s.summary ? `<p class="mb-1">${escapeHtml(s.summary)}</p>` : ''}
+      ${s.details ? `<p class="text-surface-500 line-clamp-2">${escapeHtml(s.details)}</p>` : ''}
+      ${(s.markets || s.timeframes) ? `<p class="mt-1.5 text-[10px] text-surface-500">${s.markets ? 'Markets: ' + escapeHtml(s.markets) : ''}${s.markets && s.timeframes ? ' · ' : ''}${s.timeframes ? 'TF: ' + escapeHtml(s.timeframes) : ''}</p>` : ''}
+    `;
+  } else if(preview){
+    preview.classList.add('hidden');
+    preview.innerHTML = '';
+  }
+  // Re-bind change listener isn't strictly needed if we already have one; trigger preview update
+  sel.dispatchEvent(new Event('change'));
 }
 function addStrategyFromTemplate(name){
   const user = getCurrentUser();
@@ -1337,10 +1458,11 @@ function addStrategyFromTemplate(name){
   strategies.push({id: generateId(), name, ...tpl});
   Store.saveStrategies(user.id, strategies);
   showToast(name + ' added', 'success');
-  renderPage('strategies');
+  if(currentPage === 'strategies') renderPage('strategies');
+  else if(currentPage === 'add-trade') refreshStrategyDropdown(name);
 }
 function deleteStrategy(id){
-  confirmDialog('Delete Strategy', 'Remove this strategy?', () => {
+  confirmDialog('Delete Strategy', 'Remove this strategy? Existing trades keep the strategy name tag.', () => {
     const user = getCurrentUser();
     Store.saveStrategies(user.id, Store.getStrategies(user.id).filter(s => s.id !== id));
     showToast('Deleted', 'success');

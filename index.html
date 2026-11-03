@@ -220,10 +220,10 @@ html:not(.dark) table.data-table td{color:#3f3f46}
 <script>
 /* ===================== SUPABASE CONFIG ===================== */
 /* ★★★ REPLACE THESE TWO VALUES WITH YOUR OWN ★★★ */
-const SUPABASE_URL = 'https://yryquaecrubhzjlzbigk.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlyeXF1YWVjcnViaHpqbHpiaWdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM3MTgwMjQsImV4cCI6MjEwOTI5NDAyNH0.-m-rR75DfaYLOAjkfE62Hyywq5wkB5mtGKJFeR5qGqI';
+const sb_URL = 'https://yryquaecrubhzjlzbigk.supabase.co';
+const sb_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlyeXF1YWVjcnViaHpqbHpiaWdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM3MTgwMjQsImV4cCI6MjEwOTI5NDAyNH0.-m-rR75DfaYLOAjkfE62Hyywq5wkB5mtGKJFeR5qGqI';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ===================== CORE DATA ===================== */
 const INSTRUMENTS = {

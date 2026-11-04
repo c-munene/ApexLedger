@@ -682,14 +682,11 @@ async function renderPage(page){
   Object.values(chartInstances).forEach(c => { try{c.destroy()}catch{} });
   chartInstances = {};
 
-  // Heavy / async pages get skeleton + minimum display time for a polished feel
-  const heavy = page === 'gallery' || page === 'dashboard' || page === 'analytics' || page === 'calendar';
+  // All pages show skeleton + minimum display time for a polished, consistent feel
   const skeletonStarted = performance.now();
-  if(heavy){
-    main.innerHTML = getPageSkeleton(page);
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    if(token !== _renderToken) return; // newer navigation won
-  }
+  main.innerHTML = getPageSkeleton(page);
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  if(token !== _renderToken) return; // newer navigation won
 
   let html = '';
   try {
@@ -714,13 +711,11 @@ async function renderPage(page){
     html = `<div class="p-6"><div class="card text-center py-10"><p class="text-red-400 font-medium mb-2">Something went wrong</p><p class="text-sm text-surface-400 mb-4">Could not render this page.</p><button onclick="navigate('${page}')" class="btn-primary text-sm">Retry</button></div></div>`;
   }
 
-  // Keep skeleton visible ~1.2s on heavy pages so the transition feels intentional
-  if(heavy){
-    const elapsed = performance.now() - skeletonStarted;
-    const minShow = 1200;
-    if(elapsed < minShow){
-      await new Promise(r => setTimeout(r, minShow - elapsed));
-    }
+  // Keep skeleton visible ~1.2s on every page so transitions feel intentional
+  const elapsed = performance.now() - skeletonStarted;
+  const minShow = 1200;
+  if(elapsed < minShow){
+    await new Promise(r => setTimeout(r, minShow - elapsed));
   }
 
   if(token !== _renderToken) return; // stale render

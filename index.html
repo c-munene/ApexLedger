@@ -323,12 +323,28 @@ function calcRiskAmount(inst, lots, entry, stopLoss, dir){
 }
 function getFilteredTrades(data){
   let t = data.trades || [];
-  if(selectedAccountId && selectedAccountId !== 'all') t = t.filter(x => x.accountId === selectedAccountId);
+  // Strict account isolation: only include trades belonging to the selected account
+  if(selectedAccountId && selectedAccountId !== 'all') {
+    t = t.filter(x => x.accountId === selectedAccountId);
+  }
   return t;
 }
 function getActiveAccount(data){
-  if(selectedAccountId === 'all') return data.accounts?.[0];
-  return data.accounts?.find(a => a.id === selectedAccountId);
+  if(selectedAccountId === 'all') return data.accounts?.[0] || null;
+  return (data.accounts || []).find(a => a.id === selectedAccountId) || null;
+}
+function getSelectedAccountName(data){
+  if(selectedAccountId === 'all') return 'All Accounts';
+  const acc = getActiveAccount(data);
+  return acc ? acc.name : 'Selected Account';
+}
+function getSelectedAccountBalance(data){
+  if(selectedAccountId === 'all') {
+    // Aggregate only when explicitly viewing All Accounts
+    return (data.accounts || []).reduce((s, a) => s + (Number(a.balance) || 0), 0);
+  }
+  const acc = getActiveAccount(data);
+  return acc ? (Number(acc.balance) || 0) : 0;
 }
 function calculateStatistics(trades){
   const closed = (trades || []).filter(t => t.status === 'closed');
@@ -591,37 +607,67 @@ async function renderPage(page){
 
 /* ===================== PAGES ===================== */
 function renderDashboard(data){
+  // Strict filtering: all metrics below use ONLY the selected account's trades & balance
   const trades = getFilteredTrades(data);
   const closed = trades.filter(t => t.status === 'closed');
   const stats = calculateStatistics(closed);
-  const currency = getActiveAccount(data)?.currency || 'USD';
+  const activeAcc = getActiveAccount(data);
+  const currency = activeAcc?.currency || 'USD';
+  const accountName = getSelectedAccountName(data);
+  const isAllAccounts = selectedAccountId === 'all';
   const discipline = calcDisciplineThermometer(trades);
   const recent = [...closed].sort((a,b)=>new Date(b.closeTime||b.openTime)-new Date(a.closeTime||a.openTime)).slice(0,6);
   const thisMonth = new Date().toISOString().slice(0,7);
   const monthPL = closed.filter(t=>(t.closeTime||'').startsWith(thisMonth)).reduce((s,t)=>s+(t.netPL||0),0);
 
-  // Current Equity = starting balance(s) + net P&L of filtered trades
-  let startingBalance = 0;
-  if(selectedAccountId === 'all'){
-    startingBalance = (data.accounts || []).reduce((s,a) => s + (Number(a.balance) || 0), 0);
-  } else {
-    const acc = (data.accounts || []).find(a => a.id === selectedAccountId);
-    startingBalance = acc ? (Number(acc.balance) || 0) : 0;
-  }
+  // Strict account isolation for balances and equity
+  const startingBalance = getSelectedAccountBalance(data);
   const currentEquity = startingBalance + (stats.netPL || 0);
+  const accountLabel = isAllAccounts
+    ? 'All Accounts (aggregated)'
+    : `${escapeHtml(accountName)}${activeAcc?.broker ? ' · ' + escapeHtml(activeAcc.broker) : ''}`;
 
   return `
   <div class="p-4 sm:p-6 max-w-7xl mx-auto">
     <div class="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div><h1 class="text-xl sm:text-2xl font-bold">Dashboard</h1><p class="text-surface-400 text-sm mt-0.5">Performance overview</p></div>
+      <div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <h1 class="text-xl sm:text-2xl font-bold">Dashboard</h1>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${isAllAccounts ? 'bg-surface-800 text-surface-300 border border-surface-700' : 'bg-brand-500/15 text-brand-300 border border-brand-500/30'}">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+            ${accountLabel}
+          </span>
+        </div>
+        <p class="text-surface-400 text-sm mt-0.5">${isAllAccounts ? 'Aggregated performance across accounts' : 'Performance exclusive to this account'}</p>
+      </div>
       <button onclick="navigate('add-trade')" class="btn-primary text-sm">+ Log Trade</button>
     </div>
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
-      <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Current Equity</p><p class="text-xl font-bold mono ${plClass(currentEquity - startingBalance)}">${formatCurrency(currentEquity,currency).replace('+','')}</p><p class="text-[11px] text-surface-500 mt-1">Start ${formatCurrency(startingBalance,currency).replace('+','')}</p></div>
-      <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Net P&amp;L</p><p class="text-xl font-bold mono ${plClass(stats.netPL)}">${formatCurrency(stats.netPL,currency)}</p><p class="text-[11px] text-surface-500 mt-1">${stats.totalTrades} closed trades</p></div>
-      <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Win Rate</p><p class="text-xl font-bold mono">${stats.winRate.toFixed(1)}%</p><p class="text-[11px] text-surface-500 mt-1">${stats.wins}W / ${stats.losses}L</p></div>
-      <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Profit Factor</p><p class="text-xl font-bold mono">${stats.profitFactor===Infinity?'∞':(stats.profitFactor||0).toFixed(2)}</p><p class="text-[11px] text-surface-500 mt-1">Expectancy ${formatCurrency(stats.expectancy,currency)}</p></div>
-      <div class="stat-card"><p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Month P&amp;L</p><p class="text-xl font-bold mono ${plClass(monthPL)}">${formatCurrency(monthPL,currency)}</p><p class="text-[11px] text-surface-500 mt-1">Max DD ${formatCurrency(stats.maxDrawdown,currency)}</p></div>
+      <div class="stat-card">
+        <p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Current Equity</p>
+        <p class="text-xl font-bold mono ${plClass(stats.netPL)}">${formatCurrency(currentEquity,currency).replace('+','')}</p>
+        <p class="text-[11px] text-surface-500 mt-1">Balance ${formatCurrency(startingBalance,currency).replace('+','')} · P&amp;L ${formatCurrency(stats.netPL,currency)}</p>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Net P&amp;L</p>
+        <p class="text-xl font-bold mono ${plClass(stats.netPL)}">${formatCurrency(stats.netPL,currency)}</p>
+        <p class="text-[11px] text-surface-500 mt-1">${stats.totalTrades} closed trades${isAllAccounts ? ' (all)' : ''}</p>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Win Rate</p>
+        <p class="text-xl font-bold mono">${stats.winRate.toFixed(1)}%</p>
+        <p class="text-[11px] text-surface-500 mt-1">${stats.wins}W / ${stats.losses}L</p>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Profit Factor</p>
+        <p class="text-xl font-bold mono">${stats.profitFactor===Infinity?'∞':(stats.profitFactor||0).toFixed(2)}</p>
+        <p class="text-[11px] text-surface-500 mt-1">Expectancy ${formatCurrency(stats.expectancy,currency)}</p>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Month P&amp;L</p>
+        <p class="text-xl font-bold mono ${plClass(monthPL)}">${formatCurrency(monthPL,currency)}</p>
+        <p class="text-[11px] text-surface-500 mt-1">Max DD ${formatCurrency(stats.maxDrawdown,currency)}</p>
+      </div>
     </div>
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
       <div class="card lg:col-span-2"><h3 class="text-sm font-semibold mb-3">Equity Curve</h3><div class="h-52"><canvas id="dash-equity"></canvas></div></div>
@@ -675,7 +721,7 @@ function renderAccounts(data){
             <div class="text-center p-2 rounded-lg bg-surface-800/50"><p class="text-[10px] text-surface-500">Trades</p><p class="text-sm font-semibold mono">${aTrades.length}</p></div>
           </div>
           <div class="flex gap-2">
-            <button onclick="selectAccount('${a.id}');renderPage('accounts')" class="btn-secondary text-xs flex-1">${selectedAccountId===a.id?'Selected':'Select'}</button>
+            <button onclick="selectAccount('${a.id}')" class="btn-secondary text-xs flex-1">${selectedAccountId===a.id?'Selected':'Select'}</button>
             <button onclick="deleteAccount('${a.id}')" class="btn-ghost text-xs text-red-400">Delete</button>
           </div>
         </div>`;
@@ -726,18 +772,28 @@ async function deleteAccount(id){
 
 function selectAccount(id){
   selectedAccountId = id;
-  localStorage.setItem('apexledger_selected_account',id);
+  localStorage.setItem('apexledger_selected_account', id);
   updateAccountSelector();
+  // Instantly refresh current view so all metrics, charts and stats reflect the isolated account data
+  if(currentPage) renderPage(currentPage);
 }
 
 function renderJournal(data){
   const trades = getFilteredTrades(data).slice().sort((a,b)=>new Date(b.openTime||0)-new Date(a.openTime||0));
   const currency = getActiveAccount(data)?.currency || 'USD';
   const stats = calculateStatistics(trades);
+  const accountName = getSelectedAccountName(data);
+  const isAll = selectedAccountId === 'all';
   return `
   <div class="p-4 sm:p-6 max-w-6xl mx-auto">
     <div class="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div><h1 class="text-xl sm:text-2xl font-bold">Trade Journal</h1><p class="text-surface-400 text-sm">${trades.length} trades</p></div>
+      <div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <h1 class="text-xl sm:text-2xl font-bold">Trade Journal</h1>
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${isAll ? 'bg-surface-800 text-surface-400' : 'bg-brand-500/15 text-brand-300'}">${escapeHtml(accountName)}</span>
+        </div>
+        <p class="text-surface-400 text-sm">${trades.length} trades${isAll ? ' across accounts' : ' for this account'}</p>
+      </div>
       <button onclick="navigate('add-trade')" class="btn-primary text-sm">+ Log Trade</button>
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
@@ -1035,11 +1091,19 @@ function renderAnalytics(data){
   const trades = getFilteredTrades(data).filter(t => t.status === 'closed');
   const stats = calculateStatistics(trades);
   const currency = getActiveAccount(data)?.currency || 'USD';
+  const accountName = getSelectedAccountName(data);
+  const isAll = selectedAccountId === 'all';
   const longWR = stats.longTrades ? ((trades.filter(t => (t.direction === 'buy' || t.direction === 'long') && isWinPL(t.netPL)).length / stats.longTrades) * 100).toFixed(0) : 0;
   const shortWR = stats.shortTrades ? ((trades.filter(t => (t.direction === 'sell' || t.direction === 'short') && isWinPL(t.netPL)).length / stats.shortTrades) * 100).toFixed(0) : 0;
   return `
   <div class="p-4 sm:p-6 max-w-6xl mx-auto">
-    <div class="page-header"><h1 class="text-xl sm:text-2xl font-bold">Analytics</h1><p class="text-surface-400 text-sm">Deep performance breakdown</p></div>
+    <div class="page-header">
+      <div class="flex items-center gap-2 flex-wrap">
+        <h1 class="text-xl sm:text-2xl font-bold">Analytics</h1>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${isAll ? 'bg-surface-800 text-surface-400' : 'bg-brand-500/15 text-brand-300'}">${escapeHtml(accountName)}</span>
+      </div>
+      <p class="text-surface-400 text-sm">${isAll ? 'Aggregated deep performance breakdown' : 'Deep performance breakdown for this account only'}</p>
+    </div>
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
       <div class="stat-card"><p class="text-xs text-surface-500">Net P&amp;L</p><p class="text-lg font-bold mono ${plClass(stats.netPL)}">${formatCurrency(stats.netPL, currency)}</p></div>
       <div class="stat-card"><p class="text-xs text-surface-500">Win Rate</p><p class="text-lg font-bold mono">${stats.winRate.toFixed(1)}%</p></div>
@@ -1138,10 +1202,17 @@ function renderCalendar(data){
     </div>`;
   }
 
+  const accountName = getSelectedAccountName(data);
+  const isAll = selectedAccountId === 'all';
   return `
   <div class="p-4 sm:p-6 max-w-5xl mx-auto">
     <div class="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div><h1 class="text-xl sm:text-2xl font-bold">Trading Calendar</h1></div>
+      <div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <h1 class="text-xl sm:text-2xl font-bold">Trading Calendar</h1>
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${isAll ? 'bg-surface-800 text-surface-400' : 'bg-brand-500/15 text-brand-300'}">${escapeHtml(accountName)}</span>
+        </div>
+      </div>
       <div class="flex items-center gap-2">
         <button class="btn-secondary text-sm px-3" onclick="changeCalMonth(-1)">‹</button>
         <button class="btn-secondary text-sm" onclick="goToCurrentMonth()">Today</button>
@@ -1701,7 +1772,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }));
   document.getElementById('account-selector')?.addEventListener('change', e => {
     selectAccount(e.target.value);
-    renderPage(currentPage);
   });
 });
 </script>

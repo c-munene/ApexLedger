@@ -54,17 +54,13 @@ body{font-family:Inter,system-ui,sans-serif;background:#09090b;color:#e4e4e7}
 .form-group{margin-bottom:1rem}.form-label{display:block;font-size:.8rem;font-weight:500;color:#a1a1aa;margin-bottom:.35rem}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
 @media(max-width:640px){.form-row{grid-template-columns:1fr}}
-.cal-day{min-height:88px;border-radius:.6rem;display:flex;flex-direction:column;align-items:flex-start;padding:.45rem .5rem;font-size:.8rem;cursor:pointer;border:1px solid transparent;background:#161618;transition:background .15s,border-color .15s,transform .12s}
-@media(min-width:640px){.cal-day{min-height:100px;padding:.55rem .6rem;font-size:.85rem}}
-.cal-day:hover{background:#1c1c1f;border-color:#27272a;transform:translateY(-1px)}
+.cal-day{min-height:72px;border-radius:.5rem;display:flex;flex-direction:column;align-items:flex-start;padding:.35rem .4rem;font-size:.75rem;cursor:pointer;border:1px solid transparent;background:#161618}
+.cal-day:hover{background:#1c1c1f;border-color:#27272a}
 .cal-day.has-trades{border-color:#27272a}
-.cal-day.profit{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.25)}
-.cal-day.loss{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.25)}
-.cal-day.today{border-color:#8b5cf6;box-shadow:inset 0 0 0 1px rgba(139,92,246,.35)}
+.cal-day.profit{background:rgba(16,185,129,.1)}.cal-day.loss{background:rgba(239,68,68,.1)}
+.cal-day.today{border-color:#8b5cf6;box-shadow:inset 0 0 0 1px rgba(139,92,246,.3)}
 .cal-day.other-month{opacity:.3;pointer-events:none}
-.cal-day .cal-pl{font-size:.7rem;margin-top:.15rem;font-weight:700;letter-spacing:-0.01em}
-@media(min-width:640px){.cal-day .cal-pl{font-size:.75rem}}
-.cal-day .cal-count{font-size:.65rem;color:#71717a;margin-top:.05rem}
+.cal-day .cal-pl{font-size:.62rem;margin-top:.1rem;font-weight:600}
 .sidebar{width:15rem;transition:width .25s ease,transform .28s cubic-bezier(.4,0,.2,1);background:#0c0c0e}
 .sidebar.collapsed{width:4.25rem}
 .sidebar.collapsed .nav-label,.sidebar.collapsed .sidebar-label{display:none}
@@ -351,17 +347,6 @@ function plClass(v){return v>0?'text-profit':v<0?'text-loss':''}
 function isWinPL(v){return (v||0)>0}
 function isLossPL(v){return (v||0)<0}
 function formatDate(d,withTime=false){if(!d)return'—';const dt=new Date(d);return withTime?dt.toLocaleString():dt.toLocaleDateString()}
-function toLocalDateTimeInputValue(date = new Date()){
-  const d = date instanceof Date ? date : new Date(date);
-  if(isNaN(d.getTime())) return '';
-  const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-function localDateTimeInputToISO(val){
-  if(!val) return null;
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? null : d.toISOString();
-}
 function escapeHtml(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function showToast(msg,type='info'){
   const c=document.getElementById('toast-container');
@@ -1214,19 +1199,6 @@ function renderAddTrade(data){
           </select>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-          <div class="form-group mb-0">
-            <label class="form-label">Open Date &amp; Time</label>
-            <input id="t-open-dt" type="datetime-local" class="input-field" required/>
-            <p class="text-[11px] text-surface-500 mt-1">When the trade was opened (supports historical entries)</p>
-          </div>
-          <div class="form-group mb-0" id="t-close-dt-wrap">
-            <label class="form-label">Close Date &amp; Time</label>
-            <input id="t-close-dt" type="datetime-local" class="input-field"/>
-            <p class="text-[11px] text-surface-500 mt-1">Leave blank only if status is Open</p>
-          </div>
-        </div>
-
         <div class="form-group mt-4 mb-0">
           <label class="form-label">Quick Tags</label>
           <div class="flex flex-wrap gap-1.5" id="context-tags">
@@ -1282,26 +1254,6 @@ function wireAddTradeForm(data){
       else{selectedTags.add(tag);chip.classList.add('active')}
     });
   });
-
-  // Default open/close datetimes to now (editable for historical trades)
-  const openDt = document.getElementById('t-open-dt');
-  const closeDt = document.getElementById('t-close-dt');
-  const statusEl = document.getElementById('t-status');
-  const nowLocal = toLocalDateTimeInputValue(new Date());
-  if(openDt && !openDt.value) openDt.value = nowLocal;
-  if(closeDt && !closeDt.value) closeDt.value = nowLocal;
-  function syncCloseVisibility(){
-    const isOpen = statusEl?.value === 'open';
-    const wrap = document.getElementById('t-close-dt-wrap');
-    if(wrap) wrap.style.opacity = isOpen ? '0.45' : '1';
-    if(closeDt){
-      closeDt.disabled = !!isOpen;
-      if(isOpen) closeDt.value = '';
-      else if(!closeDt.value) closeDt.value = openDt?.value || nowLocal;
-    }
-  }
-  statusEl?.addEventListener('change', syncCloseVisibility);
-  syncCloseVisibility();
 
   // Multi-screenshot preview (revoke prior object URLs to avoid memory leaks)
   const shotInput = document.getElementById('t-shot');
@@ -1397,12 +1349,6 @@ function wireAddTradeForm(data){
     const status=document.getElementById('t-status').value;
     if(!entry||isNaN(entry)) return showToast('Entry price required','error');
 
-    const openISO = localDateTimeInputToISO(document.getElementById('t-open-dt')?.value) || new Date().toISOString();
-    let closeISO = null;
-    if(status === 'closed'){
-      closeISO = localDateTimeInputToISO(document.getElementById('t-close-dt')?.value) || openISO;
-    }
-
     let pips=null, netPL=null;
     if(exit!=null&&!isNaN(exit)){
       pips=calcPips(inst,entry,exit,dir);
@@ -1436,8 +1382,8 @@ function wireAddTradeForm(data){
       setup_quality: document.getElementById('t-quality').value||null,
       r_multiple: rMultRaw!==''?parseFloat(rMultRaw):null,
       notes,
-      open_time: openISO,
-      close_time: closeISO
+      open_time: new Date().toISOString(),
+      close_time: status==='closed'?new Date().toISOString():null
     }).select().single();
 
     if(error) return showToast(error.message,'error');
@@ -1561,28 +1507,13 @@ function renderCalendar(data){
     daily[d].trades++;
   });
   const currency = getActiveAccount(data)?.currency || 'USD';
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
   const prefix = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}`;
   const monthName = new Date(calendarYear, calendarMonth, 1).toLocaleString('en-US', {month: 'long', year: 'numeric'});
 
   let monthPL = 0, monthTrades = 0;
   Object.keys(daily).forEach(d => {
     if(d.startsWith(prefix)){ monthPL += daily[d].netPL; monthTrades += daily[d].trades; }
-  });
-
-  // Daily P/L (today)
-  const dayPL = daily[todayStr]?.netPL || 0;
-  const dayTrades = daily[todayStr]?.trades || 0;
-
-  // Weekly P/L (current ISO week containing today)
-  const weekKey = getISOWeekKey(todayStr);
-  let weekPL = 0, weekTrades = 0;
-  Object.keys(daily).forEach(d => {
-    if(getISOWeekKey(d) === weekKey){
-      weekPL += daily[d].netPL;
-      weekTrades += daily[d].trades;
-    }
   });
 
   const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
@@ -1598,74 +1529,39 @@ function renderCalendar(data){
     const info = daily[dateStr];
     let cls = 'cal-day';
     if(info) cls += ' has-trades ' + (info.netPL > 0 ? 'profit' : info.netPL < 0 ? 'loss' : '');
-    if(dateStr === todayStr) cls += ' today';
-    const plLabel = info
-      ? `<span class="cal-pl mono ${plClass(info.netPL)}">${info.netPL >= 0 ? '+' : ''}${Math.round(info.netPL)}</span><span class="cal-count">${info.trades} trade${info.trades !== 1 ? 's' : ''}</span>`
-      : '';
+    if(dateStr === today) cls += ' today';
     cells += `<div class="${cls}" onclick="showDayDetail('${dateStr}')">
-      <span class="font-semibold ${dateStr === todayStr ? 'text-brand-400' : 'text-surface-200'}">${d}</span>
-      ${plLabel}
+      <span class="font-medium ${dateStr === today ? 'text-brand-400' : ''}">${d}</span>
+      ${info ? `<span class="cal-pl mono ${plClass(info.netPL)}">${info.netPL >= 0 ? '+' : ''}${Math.round(info.netPL)}</span><span class="text-[10px] text-surface-500">${info.trades}t</span>` : ''}
     </div>`;
   }
 
   const accountName = getSelectedAccountName(data);
   const isAll = selectedAccountId === 'all';
   return `
-  <div class="p-4 sm:p-6 max-w-6xl mx-auto">
+  <div class="p-4 sm:p-6 max-w-5xl mx-auto">
     <div class="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <div class="flex items-center gap-2 flex-wrap">
           <h1 class="text-xl sm:text-2xl font-bold">Trading Calendar</h1>
           <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${isAll ? 'bg-surface-800 text-surface-400' : 'bg-brand-500/15 text-brand-300'}">${escapeHtml(accountName)}</span>
         </div>
-        <p class="text-surface-400 text-sm mt-0.5">Daily &amp; weekly performance at a glance</p>
       </div>
       <div class="flex items-center gap-2">
-        <button class="btn-secondary text-sm px-3" onclick="changeCalMonth(-1)" aria-label="Previous month">‹</button>
+        <button class="btn-secondary text-sm px-3" onclick="changeCalMonth(-1)">‹</button>
         <button class="btn-secondary text-sm" onclick="goToCurrentMonth()">Today</button>
-        <button class="btn-secondary text-sm px-3" onclick="changeCalMonth(1)" aria-label="Next month">›</button>
+        <button class="btn-secondary text-sm px-3" onclick="changeCalMonth(1)">›</button>
       </div>
     </div>
-
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
-      <div class="stat-card py-3">
-        <p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Daily P&amp;L</p>
-        <p class="text-lg font-bold mono ${plClass(dayPL)}">${formatCurrency(dayPL, currency)}</p>
-        <p class="text-[11px] text-surface-500 mt-0.5">${dayTrades} trade${dayTrades !== 1 ? 's' : ''} today</p>
-      </div>
-      <div class="stat-card py-3">
-        <p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Weekly P&amp;L</p>
-        <p class="text-lg font-bold mono ${plClass(weekPL)}">${formatCurrency(weekPL, currency)}</p>
-        <p class="text-[11px] text-surface-500 mt-0.5">${weekTrades} trade${weekTrades !== 1 ? 's' : ''} this week</p>
-      </div>
-      <div class="stat-card py-3">
-        <p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Month P&amp;L</p>
-        <p class="text-lg font-bold mono ${plClass(monthPL)}">${formatCurrency(monthPL, currency)}</p>
-        <p class="text-[11px] text-surface-500 mt-0.5">${monthName}</p>
-      </div>
-      <div class="stat-card py-3">
-        <p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Month Trades</p>
-        <p class="text-lg font-bold mono">${monthTrades}</p>
-        <p class="text-[11px] text-surface-500 mt-0.5">Closed</p>
-      </div>
-      <div class="stat-card py-3">
-        <p class="text-xs text-surface-500 uppercase tracking-wide font-semibold">Active Days</p>
-        <p class="text-lg font-bold mono">${Object.keys(daily).filter(d => d.startsWith(prefix)).length}</p>
-        <p class="text-[11px] text-surface-500 mt-0.5">Days with trades</p>
-      </div>
+    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+      <div class="stat-card py-3"><p class="text-xs text-surface-500">Month P&amp;L</p><p class="text-lg font-bold mono ${plClass(monthPL)}">${formatCurrency(monthPL, currency)}</p></div>
+      <div class="stat-card py-3"><p class="text-xs text-surface-500">Month Trades</p><p class="text-lg font-bold mono">${monthTrades}</p></div>
+      <div class="stat-card py-3"><p class="text-xs text-surface-500">Active Days</p><p class="text-lg font-bold mono">${Object.keys(daily).filter(d => d.startsWith(prefix)).length}</p></div>
     </div>
-
     <div class="card mb-4">
-      <div class="flex items-center justify-between mb-4 px-1">
-        <h3 class="font-semibold text-lg">${monthName}</h3>
-        <div class="flex items-center gap-3 text-[11px] text-surface-500">
-          <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500/30 border border-emerald-500/40"></span> Profit</span>
-          <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-red-500/30 border border-red-500/40"></span> Loss</span>
-          <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm border border-brand-500"></span> Today</span>
-        </div>
-      </div>
-      <div class="grid grid-cols-7 gap-1.5 text-center mb-2">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="text-xs font-medium text-surface-500 py-1.5">${d}</div>`).join('')}</div>
-      <div class="grid grid-cols-7 gap-1.5 sm:gap-2">${cells}</div>
+      <h3 class="text-center font-semibold mb-4">${monthName}</h3>
+      <div class="grid grid-cols-7 gap-1 text-center mb-2">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="text-xs text-surface-500 py-1">${d}</div>`).join('')}</div>
+      <div class="grid grid-cols-7 gap-1.5">${cells}</div>
     </div>
     <div id="day-detail" class="mt-4"></div>
   </div>`;
@@ -1684,49 +1580,13 @@ function goToCurrentMonth(){
 }
 function showDayDetail(dateStr){
   const data = getUserData();
-  const allClosed = getFilteredTrades(data).filter(t => t.status === 'closed');
-  const trades = allClosed.filter(t => (t.closeTime || t.openTime || '').startsWith(dateStr));
+  const trades = getFilteredTrades(data).filter(t => (t.closeTime || t.openTime || '').startsWith(dateStr));
   const currency = getActiveAccount(data)?.currency || 'USD';
   const netPL = trades.reduce((s, t) => s + (t.netPL || 0), 0);
-  // Week containing this day
-  const wk = getISOWeekKey(dateStr);
-  let weekPL = 0, weekTrades = 0;
-  allClosed.forEach(t => {
-    const d = (t.closeTime || t.openTime || '').slice(0, 10);
-    if(d && getISOWeekKey(d) === wk){ weekPL += t.netPL || 0; weekTrades++; }
-  });
   const el = document.getElementById('day-detail');
   if(!el) return;
-  el.innerHTML = `
-    <div class="card">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 class="font-semibold text-lg">${formatDate(dateStr)}</h3>
-          <p class="text-xs text-surface-500 mt-0.5">${trades.length} trade${trades.length !== 1 ? 's' : ''} on this day</p>
-        </div>
-        <div class="flex gap-4">
-          <div class="text-right">
-            <p class="text-[10px] uppercase tracking-wide text-surface-500 font-semibold">Daily P&amp;L</p>
-            <p class="text-lg font-bold mono ${plClass(netPL)}">${formatCurrency(netPL, currency)}</p>
-          </div>
-          <div class="text-right border-l border-surface-800 pl-4">
-            <p class="text-[10px] uppercase tracking-wide text-surface-500 font-semibold">Week P&amp;L</p>
-            <p class="text-lg font-bold mono ${plClass(weekPL)}">${formatCurrency(weekPL, currency)}</p>
-            <p class="text-[10px] text-surface-500">${weekTrades} trades</p>
-          </div>
-        </div>
-      </div>
-      ${trades.length === 0 ? '<p class="text-sm text-surface-500 py-4 text-center">No trades on this day</p>' : trades.map(t => `
-        <div class="flex justify-between items-center py-2.5 border-b border-surface-800 last:border-0 cursor-pointer hover:bg-surface-800/30 px-1 rounded" onclick="viewTrade('${t.id}')">
-          <div class="flex gap-2 items-center">
-            <span class="badge ${t.direction === 'buy' || t.direction === 'long' ? 'badge-long' : 'badge-short'}">${(t.direction || '').toUpperCase()}</span>
-            <span class="text-sm font-medium">${t.instrument}</span>
-            <span class="text-xs text-surface-500">${t.lots} lots</span>
-            ${t.strategy ? `<span class="text-xs text-surface-500">· ${escapeHtml(t.strategy)}</span>` : ''}
-          </div>
-          ${formatPL(t.netPL, currency)}
-        </div>`).join('')}
-    </div>`;
+  el.innerHTML = `<div class="card"><div class="flex justify-between mb-3"><h3 class="font-semibold">${formatDate(dateStr)}</h3><span class="mono font-bold ${plClass(netPL)}">${formatCurrency(netPL, currency)}</span></div>
+    ${trades.length === 0 ? '<p class="text-sm text-surface-500">No trades</p>' : trades.map(t => `<div class="flex justify-between py-2 border-b border-surface-800 last:border-0 cursor-pointer" onclick="viewTrade('${t.id}')"><div class="flex gap-2 items-center"><span class="badge ${t.direction === 'buy' || t.direction === 'long' ? 'badge-long' : 'badge-short'}">${(t.direction || '').toUpperCase()}</span><span class="text-sm">${t.instrument}</span></div>${formatPL(t.netPL, currency)}</div>`).join('')}</div>`;
 }
 
 function renderSpin(data){

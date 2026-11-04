@@ -115,6 +115,21 @@ html:not(.dark) table.data-table th,html:not(.dark) table.data-table td{border-c
 html:not(.dark) table.data-table td{color:#3f3f46}
 .context-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.25rem .55rem;border-radius:9999px;font-size:.7rem;font-weight:500;background:#1c1c1f;border:1px solid #27272a;color:#a1a1aa;cursor:pointer;transition:all .15s}
 .context-chip:hover,.context-chip.active{border-color:#8b5cf6;color:#c4b5fd;background:rgba(139,92,246,.12)}
+/* Skeleton screens */
+.skeleton{background:linear-gradient(90deg,#18181b 25%,#27272a 50%,#18181b 75%);background-size:200% 100%;animation:skeleton-shimmer 1.4s ease-in-out infinite;border-radius:.5rem}
+html:not(.dark) .skeleton{background:linear-gradient(90deg,#e4e4e7 25%,#f4f4f5 50%,#e4e4e7 75%);background-size:200% 100%}
+@keyframes skeleton-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skeleton-text{height:.75rem;margin-bottom:.5rem}
+.skeleton-title{height:1.25rem;width:40%;margin-bottom:.75rem}
+.skeleton-card{background:#111113;border:1px solid #1c1c1f;border-radius:.75rem;padding:1.15rem}
+html:not(.dark) .skeleton-card{background:#fff;border-color:#e4e4e7}
+.skeleton-stat{height:4.5rem}
+.skeleton-chart{height:13rem}
+.skeleton-row{height:2.75rem;margin-bottom:.35rem}
+.skeleton-avatar{width:2rem;height:2rem;border-radius:9999px}
+.skeleton-thumb{aspect-ratio:4/3;width:100%}
+.page-enter{animation:page-fade-in .22s ease-out}
+@keyframes page-fade-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body class="bg-surface-950 text-surface-100 font-sans antialiased overflow-hidden">
@@ -577,12 +592,66 @@ function navigate(page){
   renderPage(page);
 }
 
+function getPageSkeleton(page){
+  const shell = (body) => `<div class="p-4 sm:p-6 max-w-7xl mx-auto">${body}</div>`;
+  if(page === 'dashboard' || page === 'analytics'){
+    return shell(`
+      <div class="page-header mb-5"><div class="skeleton skeleton-title" style="width:180px"></div><div class="skeleton skeleton-text" style="width:120px;height:.6rem"></div></div>
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+        ${Array(5).fill(0).map(()=>`<div class="skeleton-card"><div class="skeleton skeleton-text" style="width:50%"></div><div class="skeleton" style="height:1.75rem;width:70%;margin-top:.5rem"></div><div class="skeleton skeleton-text" style="width:40%;height:.55rem;margin-top:.6rem"></div></div>`).join('')}
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+        <div class="skeleton-card lg:col-span-2"><div class="skeleton skeleton-text" style="width:30%"></div><div class="skeleton skeleton-chart mt-3"></div></div>
+        <div class="skeleton-card"><div class="skeleton skeleton-text" style="width:40%"></div><div class="skeleton" style="height:12px;margin:1rem 0"></div><div class="flex gap-1">${Array(14).fill(0).map(()=>`<div class="skeleton" style="width:8px;height:16px"></div>`).join('')}</div></div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="skeleton-card">${Array(5).fill(0).map(()=>`<div class="skeleton skeleton-row"></div>`).join('')}</div>
+        <div class="skeleton-card"><div class="grid grid-cols-2 gap-2">${Array(4).fill(0).map(()=>`<div class="skeleton" style="height:2.75rem"></div>`).join('')}</div></div>
+      </div>`);
+  }
+  if(page === 'journal' || page === 'reports'){
+    return shell(`
+      <div class="page-header mb-4"><div class="skeleton skeleton-title" style="width:160px"></div></div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">${Array(4).fill(0).map(()=>`<div class="skeleton-card py-3"><div class="skeleton skeleton-text" style="width:40%"></div><div class="skeleton" style="height:1.25rem;width:60%;margin-top:.4rem"></div></div>`).join('')}</div>
+      <div class="skeleton-card">${Array(8).fill(0).map(()=>`<div class="skeleton skeleton-row"></div>`).join('')}</div>`);
+  }
+  if(page === 'gallery'){
+    return shell(`
+      <div class="page-header mb-4"><div class="skeleton skeleton-title" style="width:200px"></div><div class="skeleton skeleton-text" style="width:100px;height:.55rem"></div></div>
+      <div class="skeleton-card mb-4" style="height:5rem"></div>
+      <div class="gallery-grid">${Array(8).fill(0).map(()=>`<div class="skeleton-card p-0 overflow-hidden"><div class="skeleton skeleton-thumb"></div><div class="p-2"><div class="skeleton skeleton-text" style="width:60%"></div><div class="skeleton skeleton-text" style="width:40%;height:.5rem"></div></div></div>`).join('')}</div>`);
+  }
+  if(page === 'calendar'){
+    return shell(`
+      <div class="page-header mb-4"><div class="skeleton skeleton-title" style="width:180px"></div></div>
+      <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">${Array(3).fill(0).map(()=>`<div class="skeleton-card py-3"><div class="skeleton skeleton-text" style="width:50%"></div><div class="skeleton" style="height:1.25rem;width:40%;margin-top:.4rem"></div></div>`).join('')}</div>
+      <div class="skeleton-card"><div class="skeleton skeleton-title mx-auto" style="width:140px"></div><div class="grid grid-cols-7 gap-1.5 mt-4">${Array(35).fill(0).map(()=>`<div class="skeleton" style="min-height:72px;border-radius:.5rem"></div>`).join('')}</div></div>`);
+  }
+  if(page === 'add-trade'){
+    return shell(`
+      <div class="page-header mb-4"><div class="skeleton skeleton-title" style="width:140px"></div></div>
+      ${Array(3).fill(0).map(()=>`<div class="skeleton-card mb-4"><div class="skeleton skeleton-text" style="width:30%"></div><div class="grid grid-cols-2 gap-3 mt-3">${Array(4).fill(0).map(()=>`<div class="skeleton" style="height:2.5rem"></div>`).join('')}</div></div>`).join('')}`);
+  }
+  // Generic fallback
+  return shell(`
+    <div class="page-header mb-4"><div class="skeleton skeleton-title" style="width:160px"></div><div class="skeleton skeleton-text" style="width:100px;height:.55rem"></div></div>
+    <div class="skeleton-card mb-4">${Array(4).fill(0).map(()=>`<div class="skeleton skeleton-row"></div>`).join('')}</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div class="skeleton-card" style="height:10rem"></div><div class="skeleton-card" style="height:10rem"></div></div>`);
+}
+
 async function renderPage(page){
   const data = getUserData();
   if(!data) return;
   const main = document.getElementById('main-content');
   Object.values(chartInstances).forEach(c => { try{c.destroy()}catch{} });
   chartInstances = {};
+
+  // Show skeleton immediately for perceived performance
+  main.innerHTML = getPageSkeleton(page);
+
+  // Yield so browser can paint the skeleton before heavy work
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
   let html = '';
   switch(page){
     case 'dashboard': html = renderDashboard(data); break;
@@ -600,9 +669,9 @@ async function renderPage(page){
     case 'settings': html = renderSettings(data); break;
     default: html = `<div class="p-6"><p>Page not found</p></div>`;
   }
-  main.innerHTML = html;
-  if(page === 'dashboard' || page === 'analytics') setTimeout(() => initCharts(page, data), 50);
-  if(page === 'spin') setTimeout(() => drawSpinWheel(0), 30);
+  main.innerHTML = `<div class="page-enter">${html}</div>`;
+  if(page === 'dashboard' || page === 'analytics') setTimeout(() => initCharts(page, data), 40);
+  if(page === 'spin') setTimeout(() => drawSpinWheel(0), 20);
   if(page === 'add-trade') wireAddTradeForm(data);
 }
 
@@ -1982,12 +2051,19 @@ async function initApp(){
   document.getElementById('user-display-name').textContent = currentUser.name;
   document.getElementById('user-display-email').textContent = currentUser.email;
   document.getElementById('user-avatar').textContent = currentUser.name.charAt(0).toUpperCase();
+
+  // Paint shell + dashboard skeleton immediately while data loads
+  selectedAccountId = localStorage.getItem('apexledger_selected_account') || 'all';
+  document.getElementById('main-content').innerHTML = getPageSkeleton('dashboard');
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === 'dashboard'));
+  currentPage = 'dashboard';
+
   await loadAllUserData();
   setTheme(userCache.settings.theme || 'dark');
-  selectedAccountId = localStorage.getItem('apexledger_selected_account') || 'all';
   updateAccountSelector();
   startNewsTicker();
-  navigate('dashboard');
+  // Replace skeleton with real dashboard
+  await renderPage('dashboard');
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -2003,25 +2079,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  setTimeout(async () => {
-    document.getElementById('loading-screen').style.opacity = '0';
-    document.getElementById('loading-screen').style.transition = 'opacity .35s';
-    setTimeout(async () => {
-      document.getElementById('loading-screen').classList.add('hidden');
+  // Minimal splash — hide as soon as session check is ready
+  const hideSplash = () => {
+    const ls = document.getElementById('loading-screen');
+    if(!ls || ls.classList.contains('hidden')) return;
+    ls.style.opacity = '0';
+    ls.style.transition = 'opacity .25s';
+    setTimeout(() => ls.classList.add('hidden'), 250);
+  };
 
-      const { data: { session } } = await sb.auth.getSession();
-      if(session?.user){
-        currentUser = {
-          id: session.user.id,
-          name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
-          email: session.user.email
-        };
-        await initApp();
-      } else {
-        document.getElementById('auth-container').classList.remove('hidden');
-      }
-    }, 350);
-  }, 400);
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    hideSplash();
+    if(session?.user){
+      currentUser = {
+        id: session.user.id,
+        name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
+        email: session.user.email
+      };
+      await initApp();
+    } else {
+      document.getElementById('auth-container').classList.remove('hidden');
+    }
+  } catch (err) {
+    hideSplash();
+    document.getElementById('auth-container').classList.remove('hidden');
+    console.error('Boot error', err);
+  }
 
   document.getElementById('login-form')?.addEventListener('submit', async e => {
     e.preventDefault();

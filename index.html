@@ -128,8 +128,27 @@ html:not(.dark) .skeleton-card{background:#fff;border-color:#e4e4e7}
 .skeleton-row{height:2.75rem;margin-bottom:.35rem}
 .skeleton-avatar{width:2rem;height:2rem;border-radius:9999px}
 .skeleton-thumb{aspect-ratio:4/3;width:100%}
-.page-enter{animation:page-fade-in .22s ease-out}
-@keyframes page-fade-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.page-enter{animation:page-fade-in .2s ease-out}
+@keyframes page-fade-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+/* Performance & interaction polish */
+.btn-primary,.btn-secondary,.btn-ghost,.btn-danger,.nav-item,.context-chip,.stat-card,.card{transition:background-color .15s ease,border-color .15s ease,color .15s ease,transform .15s ease,box-shadow .15s ease,opacity .15s ease}
+.nav-item:active,.btn-primary:active,.btn-secondary:active{transform:scale(0.98)}
+#main-content{scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
+#sidebar-overlay{transition:opacity .2s ease}
+#sidebar-overlay.hidden{opacity:0;pointer-events:none}
+#sidebar-overlay:not(.hidden){opacity:1}
+@media (prefers-reduced-motion: reduce){
+  .skeleton{animation:none}
+  .page-enter{animation:none}
+  .news-ticker-inner{animation:none}
+  *{scroll-behavior:auto !important;transition-duration:.01ms !important}
+}
+input,select,textarea,button{touch-action:manipulation}
+.input-field:disabled{opacity:.55;cursor:not-allowed}
+/* Prevent iOS zoom on focus */
+@media (max-width:640px){
+  .input-field,select.input-field,.select-dropdown{font-size:16px}
+}
 </style>
 </head>
 <body class="bg-surface-950 text-surface-100 font-sans antialiased overflow-hidden">
@@ -582,13 +601,23 @@ async function logout(){
 }
 
 /* ===================== NAVIGATION ===================== */
+let _renderToken = 0;
+const _signedUrlCache = new Map(); // path -> {url, exp}
+
 function navigate(page){
+  if(page === currentPage && document.getElementById('main-content')?.querySelector('.page-enter')){
+    // Already on this page with content — still allow explicit refresh via other callers
+  }
   currentPage = page;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
-  if(window.innerWidth < 1024){
-    document.getElementById('sidebar').classList.remove('open');
-    document.getElementById('sidebar-overlay').classList.add('hidden');
-  }
+  // Close mobile sidebar cleanly
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if(sidebar) sidebar.classList.remove('open');
+  if(overlay) overlay.classList.add('hidden');
+  // Reset scroll for predictable navigation
+  const main = document.getElementById('main-content');
+  if(main) main.scrollTop = 0;
   renderPage(page);
 }
 
@@ -640,38 +669,56 @@ function getPageSkeleton(page){
 }
 
 async function renderPage(page){
+  const token = ++_renderToken;
   const data = getUserData();
   if(!data) return;
   const main = document.getElementById('main-content');
+  if(!main) return;
+
+  // Tear down charts cleanly
   Object.values(chartInstances).forEach(c => { try{c.destroy()}catch{} });
   chartInstances = {};
 
-  // Show skeleton immediately for perceived performance
-  main.innerHTML = getPageSkeleton(page);
-
-  // Yield so browser can paint the skeleton before heavy work
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // Heavy / async pages get skeleton; light pages render directly for snappier feel
+  const heavy = page === 'gallery' || page === 'dashboard' || page === 'analytics' || page === 'calendar';
+  if(heavy){
+    main.innerHTML = getPageSkeleton(page);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    if(token !== _renderToken) return; // newer navigation won
+  }
 
   let html = '';
-  switch(page){
-    case 'dashboard': html = renderDashboard(data); break;
-    case 'accounts': html = renderAccounts(data); break;
-    case 'journal': html = renderJournal(data); break;
-    case 'add-trade': html = renderAddTrade(data); break;
-    case 'analytics': html = renderAnalytics(data); break;
-    case 'calendar': html = renderCalendar(data); break;
-    case 'spin': html = renderSpin(data); break;
-    case 'strategies': html = renderStrategies(data); break;
-    case 'goals': html = renderGoals(data); break;
-    case 'gallery': html = await renderGallery(data); break;
-    case 'reports': html = renderReports(data); break;
-    case 'notes': html = renderNotes(data); break;
-    case 'settings': html = renderSettings(data); break;
-    default: html = `<div class="p-6"><p>Page not found</p></div>`;
+  try {
+    switch(page){
+      case 'dashboard': html = renderDashboard(data); break;
+      case 'accounts': html = renderAccounts(data); break;
+      case 'journal': html = renderJournal(data); break;
+      case 'add-trade': html = renderAddTrade(data); break;
+      case 'analytics': html = renderAnalytics(data); break;
+      case 'calendar': html = renderCalendar(data); break;
+      case 'spin': html = renderSpin(data); break;
+      case 'strategies': html = renderStrategies(data); break;
+      case 'goals': html = renderGoals(data); break;
+      case 'gallery': html = await renderGallery(data); break;
+      case 'reports': html = renderReports(data); break;
+      case 'notes': html = renderNotes(data); break;
+      case 'settings': html = renderSettings(data); break;
+      default: html = `<div class="p-6"><p>Page not found</p></div>`;
+    }
+  } catch (err) {
+    console.error('Render error', page, err);
+    html = `<div class="p-6"><div class="card text-center py-10"><p class="text-red-400 font-medium mb-2">Something went wrong</p><p class="text-sm text-surface-400 mb-4">Could not render this page.</p><button onclick="navigate('${page}')" class="btn-primary text-sm">Retry</button></div></div>`;
   }
+
+  if(token !== _renderToken) return; // stale render
   main.innerHTML = `<div class="page-enter">${html}</div>`;
-  if(page === 'dashboard' || page === 'analytics') setTimeout(() => initCharts(page, data), 40);
-  if(page === 'spin') setTimeout(() => drawSpinWheel(0), 20);
+
+  if(page === 'dashboard' || page === 'analytics'){
+    requestAnimationFrame(() => { if(token === _renderToken) initCharts(page, data); });
+  }
+  if(page === 'spin'){
+    requestAnimationFrame(() => { if(token === _renderToken) drawSpinWheel(0); });
+  }
   if(page === 'add-trade') wireAddTradeForm(data);
 }
 
@@ -841,6 +888,10 @@ async function deleteAccount(id){
 }
 
 function selectAccount(id){
+  if(id === selectedAccountId){
+    updateAccountSelector();
+    return;
+  }
   selectedAccountId = id;
   localStorage.setItem('apexledger_selected_account', id);
   updateAccountSelector();
@@ -1171,19 +1222,23 @@ function wireAddTradeForm(data){
     });
   });
 
-  // Multi-screenshot preview
+  // Multi-screenshot preview (revoke prior object URLs to avoid memory leaks)
   const shotInput = document.getElementById('t-shot');
   const shotPreviews = document.getElementById('shot-previews');
+  let _previewUrls = [];
   if(shotInput && shotPreviews){
     shotInput.addEventListener('change', () => {
+      _previewUrls.forEach(u => { try{ URL.revokeObjectURL(u); }catch{} });
+      _previewUrls = [];
       shotPreviews.innerHTML = '';
       const files = Array.from(shotInput.files || []);
-      files.forEach((file, idx) => {
+      files.forEach((file) => {
         if(!file.type.startsWith('image/')) return;
         const url = URL.createObjectURL(file);
+        _previewUrls.push(url);
         const wrap = document.createElement('div');
         wrap.className = 'relative w-20 h-20 rounded-lg overflow-hidden border border-surface-700 bg-surface-900';
-        wrap.innerHTML = `<img src="${url}" class="w-full h-full object-cover"/><span class="absolute bottom-0 left-0 right-0 bg-black/60 text-[9px] text-center truncate px-0.5">${escapeHtml(file.name)}</span>`;
+        wrap.innerHTML = `<img src="${url}" class="w-full h-full object-cover" alt=""/><span class="absolute bottom-0 left-0 right-0 bg-black/60 text-[9px] text-center truncate px-0.5">${escapeHtml(file.name)}</span>`;
         shotPreviews.appendChild(wrap);
       });
       if(files.length){
@@ -1377,14 +1432,20 @@ function initCharts(page, data){
   const isDark = document.documentElement.classList.contains('dark');
   const grid = isDark ? '#27272a' : '#e4e4e7';
   const text = isDark ? '#a1a1aa' : '#71717a';
+  const baseOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 350 },
+    plugins: { legend: { display: false } }
+  };
   if(page === 'dashboard' || page === 'analytics'){
     const eqId = page === 'dashboard' ? 'dash-equity' : 'an-equity';
     const eqCtx = document.getElementById(eqId);
     if(eqCtx && stats.equityCurve.length > 1){
       chartInstances[eqId] = new Chart(eqCtx, {
         type: 'line',
-        data: {labels: stats.equityCurve.map(p => p.x), datasets: [{data: stats.equityCurve.map(p => p.y), borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,.1)', fill: true, tension: .3, pointRadius: 0}]},
-        options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {x: {display: false}, y: {grid: {color: grid}, ticks: {color: text}}}}
+        data: {labels: stats.equityCurve.map(p => p.x), datasets: [{data: stats.equityCurve.map(p => p.y), borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,.1)', fill: true, tension: .3, pointRadius: 0, borderWidth: 2}]},
+        options: {...baseOpts, scales: {x: {display: false}, y: {grid: {color: grid}, ticks: {color: text, maxTicksLimit: 6}}}}
       });
     }
   }
@@ -1394,8 +1455,8 @@ function initCharts(page, data){
       const entries = Object.entries(stats.byInstrument || {}).sort((a, b) => b[1].netPL - a[1].netPL).slice(0, 8);
       chartInstances['an-instrument'] = new Chart(instCtx, {
         type: 'bar',
-        data: {labels: entries.map(e => e[0]), datasets: [{data: entries.map(e => e[1].netPL), backgroundColor: entries.map(e => e[1].netPL >= 0 ? 'rgba(16,185,129,.6)' : 'rgba(239,68,68,.6)')}]},
-        options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {x: {ticks: {color: text}}, y: {grid: {color: grid}, ticks: {color: text}}}}
+        data: {labels: entries.map(e => e[0]), datasets: [{data: entries.map(e => e[1].netPL), backgroundColor: entries.map(e => e[1].netPL >= 0 ? 'rgba(16,185,129,.6)' : 'rgba(239,68,68,.6)'), borderRadius: 4}]},
+        options: {...baseOpts, scales: {x: {ticks: {color: text, maxRotation: 45}}, y: {grid: {color: grid}, ticks: {color: text, maxTicksLimit: 6}}}}
       });
     }
   }
@@ -1756,12 +1817,21 @@ async function renderGallery(data){
     </div>`;
   }
 
-  // Signed URLs (batched sequentially to avoid rate limits)
+  // Signed URLs with short-lived cache to speed repeat gallery visits
   const urls = {};
+  const now = Date.now();
   for(const s of shots){
     try {
+      const cached = _signedUrlCache.get(s.storagePath);
+      if(cached && cached.exp > now){
+        urls[s.id] = cached.url;
+        continue;
+      }
       const { data: signed } = await sb.storage.from('screenshots').createSignedUrl(s.storagePath, 3600);
-      if(signed?.signedUrl) urls[s.id] = signed.signedUrl;
+      if(signed?.signedUrl){
+        urls[s.id] = signed.signedUrl;
+        _signedUrlCache.set(s.storagePath, { url: signed.signedUrl, exp: now + 50 * 60 * 1000 });
+      }
     } catch(e){ /* skip failed */ }
   }
 
@@ -2152,6 +2222,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   }));
   document.getElementById('account-selector')?.addEventListener('change', e => {
     selectAccount(e.target.value);
+  });
+
+  // Escape closes modals / lightbox / mobile menu
+  document.addEventListener('keydown', e => {
+    if(e.key !== 'Escape') return;
+    const modal = document.getElementById('modal-container');
+    if(modal && modal.innerHTML.trim()){ closeModal(); return; }
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if(sidebar?.classList.contains('open')){
+      sidebar.classList.remove('open');
+      overlay?.classList.add('hidden');
+    }
+  });
+
+  // Debounced chart resize for orientation / window changes
+  let _resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(() => {
+      Object.values(chartInstances).forEach(c => { try{ c.resize(); }catch{} });
+    }, 120);
   });
 });
 </script>

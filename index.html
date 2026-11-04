@@ -860,50 +860,132 @@ async function deleteTrade(id){
 }
 
 function renderAddTrade(data){
-  const accounts = data.accounts.filter(a=>a.status==='active');
+  const accounts = data.accounts.filter(a => a.status === 'active');
   const strategies = data.strategies || [];
   const settings = data.settings || {};
+  const preferredAccount = (selectedAccountId && selectedAccountId !== 'all')
+    ? selectedAccountId
+    : (accounts[0]?.id || '');
+
   return `
-  <div class="p-4 sm:p-6 max-w-3xl mx-auto">
-    <div class="page-header"><h1 class="text-xl sm:text-2xl font-bold">Log Trade</h1><p class="text-surface-400 text-sm mt-0.5">Record entry, exit and process context</p></div>
-    <form id="trade-form" class="space-y-4">
-      <div class="card">
-        <h3 class="text-sm font-semibold mb-3">Setup</h3>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Account</label><select id="t-account" class="input-field">${accounts.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('')}</select></div>
-          <div class="form-group"><label class="form-label">Instrument</label><select id="t-instrument" class="input-field">${Object.keys(INSTRUMENTS).map(k=>`<option value="${k}">${INSTRUMENTS[k].name}</option>`).join('')}</select></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Direction</label><select id="t-direction" class="input-field"><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select></div>
-          <div class="form-group"><label class="form-label">Lots</label><input id="t-lots" type="number" step="0.01" class="input-field" value="${settings.preferredLots||0.1}"/></div>
-        </div>
+  <div class="p-4 sm:p-6 max-w-4xl mx-auto">
+    <div class="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div>
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight">Log Trade</h1>
+        <p class="text-surface-400 text-sm mt-0.5">Capture execution details, risk, and process notes</p>
       </div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="navigate('journal')" class="btn-secondary text-sm">Cancel</button>
+        <button type="submit" form="trade-form" class="btn-primary text-sm">Save Trade</button>
+      </div>
+    </div>
+
+    <form id="trade-form" class="space-y-5">
+      <!-- 1. Execution Setup -->
       <div class="card">
-        <h3 class="text-sm font-semibold mb-3">Prices</h3>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Entry Price</label><input id="t-entry" type="number" step="any" class="input-field" required/></div>
-          <div class="form-group"><label class="form-label">Exit Price</label><input id="t-exit" type="number" step="any" class="input-field"/></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Stop Loss</label><input id="t-sl" type="number" step="any" class="input-field"/></div>
-          <div class="form-group"><label class="form-label">Take Profit</label><input id="t-tp" type="number" step="any" class="input-field"/></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Commission</label><input id="t-comm" type="number" step="0.01" class="input-field" value="0"/></div>
-          <div class="form-group"><label class="form-label">Swap</label><input id="t-swap" type="number" step="0.01" class="input-field" value="0"/></div>
-        </div>
-        <div class="mt-3 p-3 rounded-lg bg-brand-500/5 border border-brand-500/20">
-          <p class="text-xs text-surface-400 mb-1">Live calculation</p>
-          <div class="flex flex-wrap gap-4 text-sm">
-            <span>Pips: <strong id="live-pips" class="mono">—</strong></span>
-            <span>Net P&amp;L: <strong id="live-pl" class="mono">—</strong></span>
-            <span>Risk (to SL): <strong id="live-risk" class="mono">—</strong></span>
+        <div class="flex items-center gap-2 mb-4">
+          <div class="w-7 h-7 rounded-lg bg-brand-500/15 flex items-center justify-center text-brand-400 text-xs font-bold">1</div>
+          <div>
+            <h3 class="text-sm font-semibold">Execution Setup</h3>
+            <p class="text-[11px] text-surface-500">Account, instrument and position size</p>
           </div>
-          <p id="live-spec" class="text-[11px] text-surface-500 mt-1.5"></p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="form-group mb-0">
+            <label class="form-label">Account</label>
+            <select id="t-account" class="input-field">
+              ${accounts.map(a => `<option value="${a.id}" ${a.id === preferredAccount ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Instrument</label>
+            <select id="t-instrument" class="input-field">
+              ${Object.keys(INSTRUMENTS).map(k => `<option value="${k}">${INSTRUMENTS[k].name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Direction</label>
+            <select id="t-direction" class="input-field">
+              <option value="buy">Buy / Long</option>
+              <option value="sell">Sell / Short</option>
+            </select>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Position Size (Lots)</label>
+            <input id="t-lots" type="number" step="0.01" min="0.01" class="input-field" value="${settings.preferredLots || 0.1}"/>
+          </div>
         </div>
       </div>
+
+      <!-- 2. Prices & Risk -->
       <div class="card">
-        <h3 class="text-sm font-semibold mb-3">Context</h3>
+        <div class="flex items-center gap-2 mb-4">
+          <div class="w-7 h-7 rounded-lg bg-brand-500/15 flex items-center justify-center text-brand-400 text-xs font-bold">2</div>
+          <div>
+            <h3 class="text-sm font-semibold">Prices & Risk</h3>
+            <p class="text-[11px] text-surface-500">Entry, exit, stops and costs</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="form-group mb-0">
+            <label class="form-label">Entry Price <span class="text-red-400">*</span></label>
+            <input id="t-entry" type="number" step="any" class="input-field" required placeholder="0.00000"/>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Exit Price</label>
+            <input id="t-exit" type="number" step="any" class="input-field" placeholder="Leave blank if open"/>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Stop Loss</label>
+            <input id="t-sl" type="number" step="any" class="input-field" placeholder="Optional"/>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Take Profit</label>
+            <input id="t-tp" type="number" step="any" class="input-field" placeholder="Optional"/>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Commission</label>
+            <input id="t-comm" type="number" step="0.01" class="input-field" value="0"/>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Swap</label>
+            <input id="t-swap" type="number" step="0.01" class="input-field" value="0"/>
+          </div>
+        </div>
+
+        <!-- Live calculation panel -->
+        <div class="mt-5 p-4 rounded-xl bg-gradient-to-br from-brand-500/10 to-transparent border border-brand-500/25">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-xs font-semibold uppercase tracking-wider text-brand-300">Live Calculation</p>
+            <span id="live-spec" class="text-[11px] text-surface-500"></span>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="text-center p-2.5 rounded-lg bg-surface-900/60 border border-surface-800">
+              <p class="text-[10px] uppercase tracking-wide text-surface-500 mb-1">Pips</p>
+              <p id="live-pips" class="text-lg font-bold mono">—</p>
+            </div>
+            <div class="text-center p-2.5 rounded-lg bg-surface-900/60 border border-surface-800">
+              <p class="text-[10px] uppercase tracking-wide text-surface-500 mb-1">Net P&amp;L</p>
+              <p id="live-pl" class="text-lg font-bold mono">—</p>
+            </div>
+            <div class="text-center p-2.5 rounded-lg bg-surface-900/60 border border-surface-800">
+              <p class="text-[10px] uppercase tracking-wide text-surface-500 mb-1">Risk to SL</p>
+              <p id="live-risk" class="text-lg font-bold mono text-loss">—</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Process Context -->
+      <div class="card">
+        <div class="flex items-center gap-2 mb-4">
+          <div class="w-7 h-7 rounded-lg bg-brand-500/15 flex items-center justify-center text-brand-400 text-xs font-bold">3</div>
+          <div>
+            <h3 class="text-sm font-semibold">Process Context</h3>
+            <p class="text-[11px] text-surface-500">Strategy, psychology and quality tags</p>
+          </div>
+        </div>
+
         <div class="form-group">
           <div class="flex items-center justify-between mb-1">
             <label class="form-label mb-0">Strategy</label>
@@ -911,24 +993,61 @@ function renderAddTrade(data){
           </div>
           <select id="t-strategy" class="input-field">
             <option value="">— Select strategy —</option>
-            ${strategies.map(s=>`<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join('')}
+            ${strategies.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join('')}
           </select>
           <div id="strategy-preview" class="hidden mt-2 p-2.5 rounded-lg bg-surface-800/50 border border-surface-800 text-xs text-surface-400"></div>
         </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Session</label><select id="t-session" class="input-field"><option>London</option><option>New York</option><option>Asia</option><option>Overlap</option><option>Sydney</option></select></div>
-          <div class="form-group"><label class="form-label">Emotional State</label><select id="t-emotion" class="input-field"><option>Calm</option><option>Focused</option><option>Confident</option><option>FOMO</option><option>Revenge</option><option>Anxious</option><option>Bored</option></select></div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-1">
+          <div class="form-group mb-0">
+            <label class="form-label">Session</label>
+            <select id="t-session" class="input-field">
+              <option>London</option>
+              <option>New York</option>
+              <option>Asia</option>
+              <option>Overlap</option>
+              <option>Sydney</option>
+            </select>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Emotional State</label>
+            <select id="t-emotion" class="input-field">
+              <option>Calm</option>
+              <option>Focused</option>
+              <option>Confident</option>
+              <option>FOMO</option>
+              <option>Revenge</option>
+              <option>Anxious</option>
+              <option>Bored</option>
+            </select>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Setup Quality</label>
+            <select id="t-quality" class="input-field">
+              <option value="">—</option>
+              <option>A+</option>
+              <option>A</option>
+              <option>B</option>
+              <option>C</option>
+              <option>Impulse</option>
+            </select>
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">R-Multiple</label>
+            <input id="t-rmult" type="number" step="0.1" class="input-field" placeholder="e.g. 2.0"/>
+          </div>
         </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Setup Quality</label><select id="t-quality" class="input-field"><option value="">—</option><option>A+</option><option>A</option><option>B</option><option>C</option><option>Impulse</option></select></div>
-          <div class="form-group"><label class="form-label">R-Multiple</label><input id="t-rmult" type="number" step="0.1" class="input-field" placeholder="e.g. 2.0"/></div>
+
+        <div class="form-group mt-4 mb-0">
+          <label class="form-label">Trade Status</label>
+          <select id="t-status" class="input-field max-w-xs">
+            <option value="closed">Closed</option>
+            <option value="open">Open</option>
+          </select>
         </div>
-        <div class="form-group">
-          <label class="form-label">Status</label>
-          <select id="t-status" class="input-field max-w-xs"><option value="closed">Closed</option><option value="open">Open</option></select>
-        </div>
-        <div class="form-group mb-2">
-          <label class="form-label">Quick tags</label>
+
+        <div class="form-group mt-4 mb-0">
+          <label class="form-label">Quick Tags</label>
           <div class="flex flex-wrap gap-1.5" id="context-tags">
             <span class="context-chip" data-tag="HTF bias">HTF bias</span>
             <span class="context-chip" data-tag="Liquidity">Liquidity</span>
@@ -939,17 +1058,33 @@ function renderAddTrade(data){
             <span class="context-chip" data-tag="Reversal">Reversal</span>
           </div>
         </div>
-        <div class="form-group"><label class="form-label">Process / Lesson notes</label><textarea id="t-notes" class="input-field" rows="3" placeholder="Why this trade? What was the plan?"></textarea></div>
-        <div class="form-group">
-          <label class="form-label">Screenshots (optional — multiple allowed)</label>
-          <input id="t-shot" type="file" accept="image/*" multiple class="input-field"/>
-          <p class="text-[11px] text-surface-500 mt-1">You can select several images at once (max ~1.5 MB each). Previews appear below.</p>
-          <div id="shot-previews" class="mt-2 flex flex-wrap gap-2"></div>
+
+        <div class="form-group mt-4 mb-0">
+          <label class="form-label">Process / Lesson Notes</label>
+          <textarea id="t-notes" class="input-field" rows="4" placeholder="Why did you take this trade? What was the plan? What will you improve next time?"></textarea>
         </div>
       </div>
-      <div class="flex justify-end gap-2 sticky bottom-0 py-3 bg-surface-950/90 backdrop-blur">
+
+      <!-- 4. Screenshots -->
+      <div class="card">
+        <div class="flex items-center gap-2 mb-4">
+          <div class="w-7 h-7 rounded-lg bg-brand-500/15 flex items-center justify-center text-brand-400 text-xs font-bold">4</div>
+          <div>
+            <h3 class="text-sm font-semibold">Screenshots</h3>
+            <p class="text-[11px] text-surface-500">Optional chart captures — multiple images supported</p>
+          </div>
+        </div>
+        <div class="form-group mb-0">
+          <input id="t-shot" type="file" accept="image/*" multiple class="input-field"/>
+          <p class="text-[11px] text-surface-500 mt-1.5">Select one or more images (max ~1.5 MB each). Previews appear below after selection.</p>
+          <div id="shot-previews" class="mt-3 flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+
+      <!-- Sticky footer actions -->
+      <div class="flex justify-end gap-2 sticky bottom-0 py-4 bg-surface-950/95 backdrop-blur border-t border-surface-800 -mx-4 sm:-mx-6 px-4 sm:px-6">
         <button type="button" onclick="navigate('journal')" class="btn-secondary">Cancel</button>
-        <button type="submit" class="btn-primary">Save Trade</button>
+        <button type="submit" class="btn-primary px-8">Save Trade</button>
       </div>
     </form>
   </div>`;

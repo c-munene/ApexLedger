@@ -93,7 +93,8 @@ html:not(.dark) .toast{background:#fff;border-color:#e4e4e7}
 .gallery-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem}
 @media(min-width:640px){.gallery-grid{grid-template-columns:repeat(3,1fr)}}
 @media(min-width:1024px){.gallery-grid{grid-template-columns:repeat(4,1fr)}}
-.gallery-item{border-radius:.75rem;overflow:hidden;border:1px solid #1c1c1f;cursor:pointer;background:#111}
+.gallery-item{border-radius:.75rem;overflow:hidden;border:1px solid #1c1c1f;cursor:pointer;background:#111;transition:border-color .2s,transform .2s}
+.gallery-item:hover{border-color:#3f3f46;transform:translateY(-2px)}
 .gallery-item img{width:100%;aspect-ratio:4/3;object-fit:cover;transition:transform .35s}
 .gallery-item:hover img{transform:scale(1.05)}
 .news-ticker-label{font-size:.6rem;font-weight:800;letter-spacing:.08em;color:#fff;background:#ef4444;padding:.18rem .4rem;border-radius:.25rem}
@@ -939,7 +940,12 @@ function renderAddTrade(data){
           </div>
         </div>
         <div class="form-group"><label class="form-label">Process / Lesson notes</label><textarea id="t-notes" class="input-field" rows="3" placeholder="Why this trade? What was the plan?"></textarea></div>
-        <div class="form-group"><label class="form-label">Screenshot (optional)</label><input id="t-shot" type="file" accept="image/*" class="input-field"/></div>
+        <div class="form-group">
+          <label class="form-label">Screenshots (optional — multiple allowed)</label>
+          <input id="t-shot" type="file" accept="image/*" multiple class="input-field"/>
+          <p class="text-[11px] text-surface-500 mt-1">You can select several images at once (max ~1.5 MB each). Previews appear below.</p>
+          <div id="shot-previews" class="mt-2 flex flex-wrap gap-2"></div>
+        </div>
       </div>
       <div class="flex justify-end gap-2 sticky bottom-0 py-3 bg-surface-950/90 backdrop-blur">
         <button type="button" onclick="navigate('journal')" class="btn-secondary">Cancel</button>
@@ -960,6 +966,30 @@ function wireAddTradeForm(data){
       else{selectedTags.add(tag);chip.classList.add('active')}
     });
   });
+
+  // Multi-screenshot preview
+  const shotInput = document.getElementById('t-shot');
+  const shotPreviews = document.getElementById('shot-previews');
+  if(shotInput && shotPreviews){
+    shotInput.addEventListener('change', () => {
+      shotPreviews.innerHTML = '';
+      const files = Array.from(shotInput.files || []);
+      files.forEach((file, idx) => {
+        if(!file.type.startsWith('image/')) return;
+        const url = URL.createObjectURL(file);
+        const wrap = document.createElement('div');
+        wrap.className = 'relative w-20 h-20 rounded-lg overflow-hidden border border-surface-700 bg-surface-900';
+        wrap.innerHTML = `<img src="${url}" class="w-full h-full object-cover"/><span class="absolute bottom-0 left-0 right-0 bg-black/60 text-[9px] text-center truncate px-0.5">${escapeHtml(file.name)}</span>`;
+        shotPreviews.appendChild(wrap);
+      });
+      if(files.length){
+        const count = document.createElement('p');
+        count.className = 'text-[11px] text-brand-400 w-full';
+        count.textContent = `${files.length} image${files.length > 1 ? 's' : ''} selected`;
+        shotPreviews.appendChild(count);
+      }
+    });
+  }
 
   const strategySelect = document.getElementById('t-strategy');
   const strategyPreview = document.getElementById('strategy-preview');
@@ -1066,22 +1096,28 @@ function wireAddTradeForm(data){
 
     if(error) return showToast(error.message,'error');
 
-    // Screenshot upload to Supabase Storage
-    const file = document.getElementById('t-shot').files[0];
-    if(file && file.size < 1.5*1024*1024){
-      const path = `${currentUser.id}/${inserted.id}_${Date.now()}.jpg`;
-      const { error: upErr } = await sb.storage.from('screenshots').upload(path, file, { contentType: file.type });
+    // Multiple screenshot uploads to Supabase Storage
+    const files = Array.from(document.getElementById('t-shot')?.files || []);
+    let uploadedCount = 0;
+    const ts = Date.now();
+    for(let i = 0; i < files.length; i++){
+      const file = files[i];
+      if(!file.type.startsWith('image/') || file.size > 1.5*1024*1024) continue;
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g,'') || 'jpg';
+      const path = `${currentUser.id}/${inserted.id}_${ts}_${i}.${ext}`;
+      const { error: upErr } = await sb.storage.from('screenshots').upload(path, file, { contentType: file.type, upsert: false });
       if(!upErr){
-        await sb.from('screenshots').insert({
+        const { error: insErr } = await sb.from('screenshots').insert({
           user_id: currentUser.id,
           trade_id: inserted.id,
           storage_path: path,
           name: file.name
         });
+        if(!insErr) uploadedCount++;
       }
     }
 
-    showToast('Trade saved','success');
+    showToast(uploadedCount > 0 ? `Trade saved with ${uploadedCount} screenshot${uploadedCount > 1 ? 's' : ''}` : 'Trade saved', 'success');
     await loadAllUserData();
     navigate('journal');
   });
@@ -1486,30 +1522,155 @@ async function saveGoals(){
 }
 
 async function renderGallery(data){
-  const shots = data.screenshots || [];
+  // Respect account isolation: only screenshots linked to filtered trades
+  const filteredTrades = getFilteredTrades(data);
+  const tradeIds = new Set(filteredTrades.map(t => t.id));
+  let shots = (data.screenshots || []).filter(s => !s.tradeId || tradeIds.has(s.tradeId));
+
+  const accountName = getSelectedAccountName(data);
+  const isAll = selectedAccountId === 'all';
+
+  // Build filter options from available data
+  const instruments = [...new Set(filteredTrades.map(t => t.instrument).filter(Boolean))].sort();
+  const strategies = [...new Set(filteredTrades.map(t => t.strategy).filter(Boolean))].sort();
+
   if(shots.length === 0){
-    return `<div class="p-4 sm:p-6 max-w-6xl mx-auto"><div class="page-header"><h1 class="text-xl sm:text-2xl font-bold">Screenshot Gallery</h1></div><div class="card empty-state">Attach screenshots when logging trades</div></div>`;
+    return `
+    <div class="p-4 sm:p-6 max-w-6xl mx-auto">
+      <div class="page-header">
+        <div class="flex items-center gap-2 flex-wrap">
+          <h1 class="text-xl sm:text-2xl font-bold">Screenshot Gallery</h1>
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${isAll ? 'bg-surface-800 text-surface-400' : 'bg-brand-500/15 text-brand-300'}">${escapeHtml(accountName)}</span>
+        </div>
+        <p class="text-surface-400 text-sm">Trade captures & chart screenshots</p>
+      </div>
+      <div class="card empty-state">
+        <p class="mb-2">No screenshots yet${isAll ? '' : ' for this account'}.</p>
+        <p class="text-sm text-surface-500">Attach one or more images when logging a trade.</p>
+        <button onclick="navigate('add-trade')" class="btn-primary text-sm mt-4">+ Log Trade</button>
+      </div>
+    </div>`;
   }
-  // Get signed URLs for private bucket
+
+  // Signed URLs (batched sequentially to avoid rate limits)
   const urls = {};
   for(const s of shots){
-    const { data } = await sb.storage.from('screenshots').createSignedUrl(s.storagePath, 3600);
-    if(data?.signedUrl) urls[s.id] = data.signedUrl;
+    try {
+      const { data: signed } = await sb.storage.from('screenshots').createSignedUrl(s.storagePath, 3600);
+      if(signed?.signedUrl) urls[s.id] = signed.signedUrl;
+    } catch(e){ /* skip failed */ }
   }
+
+  // Pre-build trade lookup for filters & display
+  const tradeMap = {};
+  filteredTrades.forEach(t => { tradeMap[t.id] = t; });
+
   return `
   <div class="p-4 sm:p-6 max-w-6xl mx-auto">
-    <div class="page-header"><h1 class="text-xl sm:text-2xl font-bold">Screenshot Gallery</h1><p class="text-surface-400 text-sm">${shots.length} captures</p></div>
-    <div class="gallery-grid">${shots.map(s => {
-      const trade = (data.trades || []).find(t => t.id === s.tradeId);
-      const src = urls[s.id] || '';
-      return `<div class="gallery-item" onclick="openLightbox('${src}')"><img src="${src}" loading="lazy"/><div class="p-2 text-xs text-surface-400">${trade ? trade.instrument : 'Unlinked'} · ${formatDate(s.createdAt)}</div></div>`;
-    }).join('')}</div>
+    <div class="page-header">
+      <div class="flex items-center gap-2 flex-wrap">
+        <h1 class="text-xl sm:text-2xl font-bold">Screenshot Gallery</h1>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${isAll ? 'bg-surface-800 text-surface-400' : 'bg-brand-500/15 text-brand-300'}">${escapeHtml(accountName)}</span>
+      </div>
+      <p class="text-surface-400 text-sm"><span id="gallery-count">${shots.length}</span> capture${shots.length !== 1 ? 's' : ''}${isAll ? '' : ' for this account'}</p>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+      <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+        <div class="form-group mb-0 flex-1 min-w-[140px]">
+          <label class="form-label">Instrument</label>
+          <select id="gal-instrument" class="input-field" onchange="applyGalleryFilters()">
+            <option value="">All instruments</option>
+            ${instruments.map(i => `<option value="${escapeHtml(i)}">${escapeHtml(i)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group mb-0 flex-1 min-w-[140px]">
+          <label class="form-label">Strategy</label>
+          <select id="gal-strategy" class="input-field" onchange="applyGalleryFilters()">
+            <option value="">All strategies</option>
+            ${strategies.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group mb-0 flex-1 min-w-[120px]">
+          <label class="form-label">Direction</label>
+          <select id="gal-direction" class="input-field" onchange="applyGalleryFilters()">
+            <option value="">Any</option>
+            <option value="buy">Long / Buy</option>
+            <option value="sell">Short / Sell</option>
+          </select>
+        </div>
+        <div class="form-group mb-0 flex-1 min-w-[140px]">
+          <label class="form-label">Search</label>
+          <input id="gal-search" type="text" class="input-field" placeholder="Instrument, notes..." oninput="applyGalleryFilters()"/>
+        </div>
+        <button onclick="clearGalleryFilters()" class="btn-secondary text-sm shrink-0">Clear</button>
+      </div>
+    </div>
+
+    <div id="gallery-grid" class="gallery-grid">
+      ${shots.map(s => {
+        const trade = tradeMap[s.tradeId];
+        const src = urls[s.id] || '';
+        const dir = trade ? (trade.direction || '') : '';
+        const isLong = dir === 'buy' || dir === 'long';
+        const pl = trade ? (trade.netPL || 0) : null;
+        return `<div class="gallery-item" data-instrument="${escapeHtml(trade?.instrument || '')}" data-strategy="${escapeHtml(trade?.strategy || '')}" data-direction="${escapeHtml(dir)}" data-search="${escapeHtml((trade?.instrument || '') + ' ' + (trade?.strategy || '') + ' ' + (trade?.notes || '') + ' ' + (s.name || '')).toLowerCase()}" onclick="openLightbox('${src}')">
+          <img src="${src}" loading="lazy" alt="Trade screenshot"/>
+          <div class="p-2 space-y-0.5">
+            <div class="flex items-center justify-between gap-1">
+              <span class="text-xs font-medium truncate">${trade ? escapeHtml(trade.instrument) : 'Unlinked'}</span>
+              ${trade ? `<span class="badge ${isLong ? 'badge-long' : 'badge-short'} text-[9px]">${isLong ? 'L' : 'S'}</span>` : ''}
+            </div>
+            <div class="flex items-center justify-between text-[10px] text-surface-500">
+              <span>${formatDate(s.createdAt)}</span>
+              ${pl != null ? `<span class="mono ${plClass(pl)}">${pl >= 0 ? '+' : ''}${Math.round(pl)}</span>` : ''}
+            </div>
+            ${trade?.strategy ? `<p class="text-[10px] text-surface-500 truncate">${escapeHtml(trade.strategy)}</p>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <p id="gallery-empty-filter" class="hidden text-center text-surface-500 py-10 text-sm">No screenshots match the current filters.</p>
   </div>`;
 }
+
+function applyGalleryFilters(){
+  const inst = (document.getElementById('gal-instrument')?.value || '').toLowerCase();
+  const strat = (document.getElementById('gal-strategy')?.value || '').toLowerCase();
+  const dir = (document.getElementById('gal-direction')?.value || '').toLowerCase();
+  const q = (document.getElementById('gal-search')?.value || '').toLowerCase().trim();
+  const items = document.querySelectorAll('#gallery-grid .gallery-item');
+  let visible = 0;
+  items.forEach(el => {
+    const matchInst = !inst || (el.dataset.instrument || '').toLowerCase() === inst;
+    const matchStrat = !strat || (el.dataset.strategy || '').toLowerCase() === strat;
+    const matchDir = !dir || (el.dataset.direction || '').toLowerCase().includes(dir);
+    const matchQ = !q || (el.dataset.search || '').includes(q);
+    const show = matchInst && matchStrat && matchDir && matchQ;
+    el.style.display = show ? '' : 'none';
+    if(show) visible++;
+  });
+  const countEl = document.getElementById('gallery-count');
+  if(countEl) countEl.textContent = visible;
+  const emptyEl = document.getElementById('gallery-empty-filter');
+  if(emptyEl) emptyEl.classList.toggle('hidden', visible > 0);
+}
+
+function clearGalleryFilters(){
+  ['gal-instrument','gal-strategy','gal-direction'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  const search = document.getElementById('gal-search');
+  if(search) search.value = '';
+  applyGalleryFilters();
+}
+
 function openLightbox(src){
   if(!src) return;
   const c = document.getElementById('modal-container');
-  c.innerHTML = `<div class="lightbox" onclick="closeModal()"><img src="${src}"/></div>`;
+  c.innerHTML = `<div class="lightbox" onclick="closeModal()"><img src="${src}" alt="Screenshot"/></div>`;
 }
 
 function renderReports(data){

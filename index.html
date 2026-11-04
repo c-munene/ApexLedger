@@ -98,9 +98,11 @@ html:not(.dark) .toast{background:#fff;border-color:#e4e4e7}
 .gallery-item img{width:100%;aspect-ratio:4/3;object-fit:cover;transition:transform .35s}
 .gallery-item:hover img{transform:scale(1.05)}
 .news-ticker-label{font-size:.6rem;font-weight:800;letter-spacing:.08em;color:#fff;background:#ef4444;padding:.18rem .4rem;border-radius:.25rem}
-.news-ticker-track{overflow:hidden;flex:1;mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
-.news-ticker-inner{display:flex;width:max-content;white-space:nowrap;animation:ticker 45s linear infinite}
+.news-ticker-track{overflow:hidden;flex:1;mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+.news-ticker-inner{display:flex;width:max-content;white-space:nowrap;animation:ticker 45s linear infinite;will-change:transform}
 @keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+/* Never pause the live feed */
+.news-ticker-inner{animation-play-state:running !important}
 .discipline-thermo-track{height:12px;border-radius:9999px;background:linear-gradient(90deg,rgba(239,68,68,.22),rgba(80,80,80,.25) 50%,rgba(16,185,129,.22));border:1px solid #27272a;position:relative}
 .discipline-thermo-marker{position:absolute;top:-3px;bottom:-3px;width:3px;margin-left:-1.5px;background:#fff;border-radius:2px;z-index:3}
 .discipline-day{width:8px;height:16px;border-radius:2px;flex-shrink:0}
@@ -140,8 +142,9 @@ html:not(.dark) .skeleton-card{background:#fff;border-color:#e4e4e7}
 @media (prefers-reduced-motion: reduce){
   .skeleton{animation:none}
   .page-enter{animation:none}
-  .news-ticker-inner{animation:none}
-  *{scroll-behavior:auto !important;transition-duration:.01ms !important}
+  /* Keep live news feed moving; only soften other motion */
+  *{scroll-behavior:auto !important}
+  .btn-primary,.btn-secondary,.nav-item,.stat-card,.card{transition-duration:.01ms !important}
 }
 input,select,textarea,button{touch-action:manipulation}
 .input-field:disabled{opacity:.55;cursor:not-allowed}
@@ -2118,10 +2121,42 @@ function updateAccountSelector(){
 }
 
 function startNewsTicker(){
-  const items = ['USD CPI m/m 0.3% · High impact','EUR ECB Rate Decision · 14:30 GMT','GBP GDP q/q 0.1%','XAUUSD volatility elevated into US open','NAS100 futures +0.4% pre-market','USDJPY approaches 152.00 resistance','FOMC minutes later today · Watch USD','AUD employment change due overnight','USOIL inventories release · Watch energy'];
+  const items = [
+    'USD CPI m/m 0.3% · High impact',
+    'EUR ECB Rate Decision · 14:30 GMT',
+    'GBP GDP q/q 0.1%',
+    'XAUUSD volatility elevated into US open',
+    'NAS100 futures +0.4% pre-market',
+    'USDJPY approaches 152.00 resistance',
+    'FOMC minutes later today · Watch USD',
+    'AUD employment change due overnight',
+    'USOIL inventories release · Watch energy'
+  ];
   const el = document.getElementById('news-content');
-  if(el) el.innerHTML = items.concat(items).map(t => `<span class="px-4">${t}</span><span class="text-surface-600">·</span>`).join('');
+  if(!el) return;
+  // Duplicate content for seamless infinite loop
+  el.innerHTML = items.concat(items).map(t => `<span class="px-4">${t}</span><span class="text-surface-600">·</span>`).join('');
+  // Force animation restart (survives refresh / tab focus / DOM updates)
+  el.style.animation = 'none';
+  // eslint-disable-next-line no-unused-expressions
+  el.offsetHeight;
+  el.style.animation = '';
+  el.classList.add('news-ticker-inner');
 }
+
+// Keep feed alive when user returns to the tab after refresh / sleep
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible'){
+    const el = document.getElementById('news-content');
+    if(el && el.children.length){
+      el.style.animation = 'none';
+      el.offsetHeight;
+      el.style.animation = '';
+    } else if(currentUser){
+      startNewsTicker();
+    }
+  }
+});
 
 /* ===================== BOOT ===================== */
 async function initApp(){
@@ -2137,10 +2172,13 @@ async function initApp(){
   document.getElementById('main-content').innerHTML = getPageSkeleton('dashboard');
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === 'dashboard'));
   currentPage = 'dashboard';
+  // Start live feed immediately — do not wait for data load
+  startNewsTicker();
 
   await loadAllUserData();
   setTheme(userCache.settings.theme || 'dark');
   updateAccountSelector();
+  // Ensure feed is still running after async work
   startNewsTicker();
   // Replace skeleton with real dashboard
   await renderPage('dashboard');
